@@ -1,6 +1,7 @@
-import { isSupportedApiLanguage, loadCards, loadCharacters, loadKeywords } from './api';
+import { isSupportedApiLanguage, loadCards, loadCharacters, loadDefaultEnglishCards, loadDefaultEnglishKeywords, loadKeywords } from './api';
+import { buildCardSearchIndex, sortCards } from './cards';
 import { CHARACTER_IDS, getUiLanguage, t } from './config';
-import { dom, saveState, state } from './state';
+import { dom, saveState, state, type ApiCard } from './state';
 import { addTier as appendTier, exportJson, exportMarkdown, exportTierImage, importJson, moveCard, normalizeImportedProject, removeTier, setNote } from './tierlist';
 import { findCardById, getAllCards, getProject, hideHoverPreview, renderAll, renderDock, renderMenus, renderPopup, renderTierStage, setLoading, showHoverPreview, showSnackbar } from './render';
 
@@ -106,6 +107,8 @@ function resetPopupState(cardId: string | null = null): void {
   state.popup.cardId = cardId;
   state.popup.editing = false;
   state.popup.upgraded = false;
+  state.popup.deleteTierIndex = null;
+  state.popup.sortTierIndex = null;
 }
 
 function resetViewState(): void {
@@ -119,7 +122,11 @@ function clearHover(): void {
 }
 
 function isPreviewBlocked(): boolean {
-  return !!state.popup.cardId || !!desktopDrag || !!touchDrag?.dragging;
+  return isPopupOpen() || !!desktopDrag || !!touchDrag?.dragging;
+}
+
+function isPopupOpen(): boolean {
+  return !!state.popup.cardId || state.popup.deleteTierIndex != null || state.popup.sortTierIndex != null;
 }
 
 function refreshHoverPreview(): void {
@@ -284,6 +291,24 @@ function clearLoadedData(): void {
   state.characters = {};
   state.keywords = {};
   state.cards = {};
+  state.searchIndex = {};
+}
+
+async function buildCurrentSearchIndex(cards: ApiCard[]): Promise<void> {
+  let englishCards: ApiCard[] = [];
+  let englishKeywords: Record<string, string> = {};
+  if (state.apiLang !== 'eng') {
+    try {
+      [englishCards, englishKeywords] = await Promise.all([
+        loadDefaultEnglishCards(state.currentCharacter),
+        loadDefaultEnglishKeywords(),
+      ]);
+    } catch {
+      englishCards = [];
+      englishKeywords = {};
+    }
+  }
+  state.searchIndex = buildCardSearchIndex(cards, state.keywords, state.apiLang, englishCards, englishKeywords);
 }
 
 function renderAllAndSave(): void {
@@ -300,6 +325,52 @@ function renderTierStageDockAndSave(): void {
   renderTierStage();
   renderDock();
   saveState();
+}
+
+function sortTierCards(tierIndex: number): void {
+  const tier = getProject().tiers[tierIndex];
+  if (!tier) return;
+  const cardMap = new Map(getAllCards().map(card => [card.id, card]));
+  const resolved = tier.cards.map(cardId => cardMap.get(cardId)).filter((card): card is ApiCard => !!card);
+  const sortedCards = sortCards(resolved);
+  const sortedIds = new Set(sortedCards.map(card => card.id));
+  tier.cards = [
+    ...sortedCards.map(card => card.id),
+    ...tier.cards.filter(cardId => !sortedIds.has(cardId)),
+  ];
+}
+
+function openDeleteTierConfirm(tierIndex: number): void {
+  clearHover();
+  resetPopupState();
+  state.popup.deleteTierIndex = tierIndex;
+  renderPopup();
+}
+
+function openSortTierConfirm(tierIndex: number): void {
+  clearHover();
+  resetPopupState();
+  state.popup.sortTierIndex = tierIndex;
+  renderPopup();
+}
+
+function confirmDeleteTier(): void {
+  const tierIndex = state.popup.deleteTierIndex;
+  if (tierIndex == null) return;
+  removeTier(getProject(), tierIndex);
+  resetPopupState();
+  renderTierStageDockAndSave();
+  renderPopup();
+  showSnackbar(t(getCurrentUiLanguage(), 'tierDeleted'));
+}
+
+function confirmSortTier(): void {
+  const tierIndex = state.popup.sortTierIndex;
+  if (tierIndex == null) return;
+  sortTierCards(tierIndex);
+  resetPopupState();
+  renderTierStageAndSave();
+  renderPopup();
 }
 
 function resolveTierInsertion(zone: HTMLElement, cardId: string, clientX: number, clientY: number): string | null {
@@ -397,7 +468,9 @@ async function loadCurrentData(includeLanguageData: boolean): Promise<void> {
     state.characters = Object.fromEntries(characters.map(character => [character.id, character]));
     state.keywords = keywords;
   }
-  state.cards[state.currentCharacter] = await loadCards(state.currentCharacter, state.apiLang);
+  const cards = await loadCards(state.currentCharacter, state.apiLang);
+  state.cards[state.currentCharacter] = cards;
+  await buildCurrentSearchIndex(cards);
 }
 
 async function applyLoadedState(includeLanguageData: boolean, afterLoad?: () => void, persist = true): Promise<void> {
@@ -572,11 +645,23 @@ export function bindInteractions(): void {
     void selectApiLanguage(button.dataset.apiLanguageSelect || '');
   });
   dom.tierStage.addEventListener('click', event => {
+    const sortButton = (event.target as HTMLElement).closest<HTMLElement>('[data-sort-tier]');
+    if (sortButton) {
+      openSortTierConfirm(Number(sortButton.dataset.sortTier));
+      return;
+    }
     const deleteButton = (event.target as HTMLElement).closest<HTMLElement>('[data-delete-tier]');
     if (deleteButton) {
-      removeTier(getProject(), Number(deleteButton.dataset.deleteTier));
-      renderTierStageDockAndSave();
-      showSnackbar(t(getCurrentUiLanguage(), 'tierDeleted'));
+      const tierIndex = Number(deleteButton.dataset.deleteTier);
+      const tier = getProject().tiers[tierIndex];
+      if (!tier) return;
+      if (tier.cards.length === 0) {
+        removeTier(getProject(), tierIndex);
+        renderTierStageDockAndSave();
+        showSnackbar(t(getCurrentUiLanguage(), 'tierDeleted'));
+        return;
+      }
+      openDeleteTierConfirm(tierIndex);
       return;
     }
     const card = (event.target as HTMLElement).closest<HTMLElement>('.card-item');
@@ -611,7 +696,7 @@ export function bindInteractions(): void {
       refreshHoverPreview();
     }
     if (event.key === 'Escape') {
-      if (state.popup.cardId) {
+      if (isPopupOpen()) {
         closePopup();
         return;
       }
@@ -637,6 +722,26 @@ export function bindInteractions(): void {
   });
   dom.popupOverlay.addEventListener('click', () => closePopup());
   dom.popupCard.addEventListener('click', event => {
+    const cancelSort = (event.target as HTMLElement).closest<HTMLElement>('[data-popup-cancel-sort]');
+    if (cancelSort) {
+      closePopup();
+      return;
+    }
+    const confirmSort = (event.target as HTMLElement).closest<HTMLElement>('[data-popup-confirm-sort]');
+    if (confirmSort) {
+      confirmSortTier();
+      return;
+    }
+    const cancelDelete = (event.target as HTMLElement).closest<HTMLElement>('[data-popup-cancel-delete]');
+    if (cancelDelete) {
+      closePopup();
+      return;
+    }
+    const confirmDelete = (event.target as HTMLElement).closest<HTMLElement>('[data-popup-confirm-delete]');
+    if (confirmDelete) {
+      confirmDeleteTier();
+      return;
+    }
     const toggleUpgrade = (event.target as HTMLElement).closest<HTMLElement>('[data-popup-toggle-upgrade]');
     if (toggleUpgrade) {
       state.popup.upgraded = !state.popup.upgraded;
@@ -695,7 +800,7 @@ export function bindInteractions(): void {
     clearHover();
   });
   document.addEventListener('dragstart', event => {
-    if (state.popup.cardId) {
+    if (isPopupOpen()) {
       event.preventDefault();
       return;
     }
@@ -768,7 +873,7 @@ export function bindInteractions(): void {
     finishDesktopDrag();
   });
   document.addEventListener('touchstart', event => {
-    if (state.popup.cardId) return;
+    if (isPopupOpen()) return;
     const target = event.target as HTMLElement;
     const handle = target.closest<HTMLElement>('[data-tier-drag-handle="true"]');
     if (handle) {

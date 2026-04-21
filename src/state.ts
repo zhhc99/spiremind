@@ -71,11 +71,14 @@ export type State = {
   characters: Record<string, CharacterInfo>;
   keywords: Record<string, string>;
   cards: Record<string, ApiCard[]>;
+  searchIndex: Record<string, string>;
   project: Record<string, CharacterProjectData>;
   popup: {
     cardId: string | null;
     upgraded: boolean;
     editing: boolean;
+    deleteTierIndex: number | null;
+    sortTierIndex: number | null;
   };
 };
 
@@ -118,11 +121,14 @@ export const state: State = {
   characters: {},
   keywords: {},
   cards: {},
+  searchIndex: {},
   project: saved.project || {},
   popup: {
     cardId: null,
     upgraded: false,
     editing: false,
+    deleteTierIndex: null,
+    sortTierIndex: null,
   },
 };
 

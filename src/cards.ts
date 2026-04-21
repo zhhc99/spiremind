@@ -5,7 +5,6 @@ const RARITY_ORDER: Record<string, number> = { Basic: 0, Common: 1, Uncommon: 2,
 const TYPE_ORDER: Record<string, number> = { Attack: 1, Skill: 2, Power: 3 };
 const KEYWORDS_BEFORE = ['UNPLAYABLE', 'INNATE', 'ETHEREAL', 'RETAIN', 'SLY'];
 const KEYWORDS_AFTER = ['EXHAUST', 'ETERNAL'];
-
 export function getCardImageUrl(card: ApiCard): string {
   if (!card.image_url) return '';
   return card.image_url.startsWith('http') ? card.image_url : `${API_ORIGIN}${card.image_url}`;
@@ -57,6 +56,17 @@ function escapeHtml(text: string): string {
 
 function cleanDescription(text: string): string {
   return text.replace(/\[(?!\/?(gold|red|blue|green|purple|orange|energy|star|upgrade)\b)[^\]]+\]/gi, '');
+}
+
+function normalizeSearchText(text: string): string {
+  return cleanDescription(text)
+    .replace(/\[\/?(gold|red|blue|green|purple|orange|upgrade)\]/gi, ' ')
+    .replace(/\[energy:\d+\]/gi, ' energy ')
+    .replace(/\[star:\d+\]/gi, ' star ')
+    .replaceAll('_', ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 }
 
 function getResolvedValue(baseValue: number | string | null, upgradeValue: number | string | boolean | undefined): string {
@@ -173,6 +183,27 @@ export function buildCardDescription(card: ApiCard, upgraded: boolean, keywords:
   const footerLines = KEYWORDS_AFTER.filter(keyword => list.includes(keyword)).map(keyword => `[gold]${keywords[keyword] || keyword}[/gold]${period}`);
   const middle = formatUpgradeText(card, upgraded);
   return [...headerLines, middle, ...footerLines].filter(Boolean).join('\n');
+}
+
+function getSingleCardSearchText(card: ApiCard, keywords: Record<string, string>, apiLanguage: string): string {
+  const keywordNames = (card.keywords_key || []).map(keyword => keywords[keyword.toUpperCase()] || keyword);
+  return normalizeSearchText([
+    card.name,
+    card.id,
+    buildCardDescription(card, false, keywords, apiLanguage),
+    buildCardDescription(card, true, keywords, apiLanguage),
+    ...keywordNames,
+  ].join('\n'));
+}
+
+export function buildCardSearchIndex(cards: ApiCard[], keywords: Record<string, string>, apiLanguage: string, englishCards: ApiCard[] = [], englishKeywords: Record<string, string> = {}): Record<string, string> {
+  const englishMap = new Map(englishCards.map(card => [card.id, card]));
+  return Object.fromEntries(cards.map(card => {
+    const searchParts = [getSingleCardSearchText(card, keywords, apiLanguage)];
+    const englishCard = englishMap.get(card.id);
+    if (englishCard) searchParts.push(getSingleCardSearchText(englishCard, englishKeywords, ''));
+    return [card.id, normalizeSearchText(searchParts.join('\n'))];
+  }));
 }
 
 export function renderRichText(text: string, characterId: CharacterId): string {

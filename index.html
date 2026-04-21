@@ -436,6 +436,18 @@ button,input,textarea{font:inherit}
 [data-theme="dark"] .popup-note-field:focus-within{box-shadow:0 0 0 2px rgba(208,188,255,.14)}
 .popup-note-label{position:absolute;top:-9px;left:12px;padding:0 6px;background:var(--md-sys-color-surface);font-size:.75rem;color:var(--md-sys-color-primary)}
 .popup-note-field textarea{width:100%;min-height:124px;border:none;background:transparent;outline:none;resize:vertical;padding:16px 14px 14px;color:var(--md-sys-color-on-surface);line-height:1.6;text-align:center}
+.confirm-dialog{display:flex;flex-direction:column;align-items:center;text-align:center;gap:14px;padding:6px 4px}
+.confirm-dialog-icon{display:flex;align-items:center;justify-content:center;width:52px;height:52px;border-radius:16px;background:color-mix(in srgb,var(--md-sys-color-error,#b3261e) 12%,var(--md-sys-color-surface));color:var(--md-sys-color-error,#b3261e)}
+.confirm-dialog-icon.sort{background:color-mix(in srgb,var(--md-sys-color-primary) 12%,var(--md-sys-color-surface));color:var(--md-sys-color-primary)}
+.confirm-dialog-icon .material-icons-round{font-size:28px}
+.confirm-dialog-title{font-size:1.1rem;font-weight:700;color:var(--md-sys-color-on-surface)}
+.confirm-dialog-text{font-size:.9rem;line-height:1.6;color:var(--md-sys-color-on-surface-variant)}
+.confirm-dialog-actions{display:flex;justify-content:flex-end;gap:10px;width:100%;margin-top:4px}
+.confirm-btn{display:inline-flex;align-items:center;justify-content:center;min-width:84px;height:40px;padding:0 18px;border-radius:999px;border:none;font:inherit;font-weight:600;cursor:pointer;transition:background .2s,color .2s,box-shadow .2s}
+.confirm-btn.text{background:transparent;color:var(--md-sys-color-primary)}
+.confirm-btn.text:hover{background:color-mix(in srgb,var(--md-sys-color-primary) 10%,transparent)}
+.confirm-btn.filled{background:var(--md-sys-color-primary);color:var(--md-sys-color-on-primary)}
+.confirm-btn.filled:hover{box-shadow:var(--md-sys-elevation-1)}
 .snackbar{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:var(--md-sys-color-inverse-surface);color:var(--md-sys-color-inverse-on-surface);padding:10px 20px;border-radius:var(--md-sys-shape-corner-small);font-size:.8rem;font-weight:500;box-shadow:var(--md-sys-elevation-3);z-index:500;opacity:0;transition:opacity .2s;pointer-events:none;white-space:nowrap}
 .snackbar.show{opacity:1}
 .loading-overlay{position:fixed;inset:0;background:var(--md-sys-color-background);display:flex;align-items:center;justify-content:center;z-index:400;flex-direction:column;gap:16px;transition:opacity .3s}

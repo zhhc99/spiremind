@@ -4,6 +4,8 @@ import type { ApiCard, CharacterInfo } from './state';
 const characterCache = new Map<string, CharacterInfo[]>();
 const keywordCache = new Map<string, Record<string, string>>();
 const cardCache = new Map<string, ApiCard[]>();
+let defaultEnglishKeywordsCache: Record<string, string> | null = null;
+const defaultEnglishCardCache = new Map<string, ApiCard[]>();
 
 async function fetchJson<T>(path: string, params: Record<string, string> = {}): Promise<T> {
   const url = new URL(API_ROOT + path);
@@ -71,5 +73,24 @@ export async function loadCards(characterId: CharacterId, apiLanguage: string): 
   if (cached) return cached;
   const cards = await fetchJson<ApiCard[]>('/cards', { color: characterId, lang: apiLanguage });
   cardCache.set(cacheKey, cards);
+  return cards;
+}
+
+export async function loadDefaultEnglishKeywords(): Promise<Record<string, string>> {
+  if (defaultEnglishKeywordsCache) return defaultEnglishKeywordsCache;
+  const items = await fetchJson<Array<{ id: string; name: string }>>('/keywords');
+  const keywords: Record<string, string> = {};
+  items.forEach(item => {
+    keywords[item.id.toUpperCase()] = item.name;
+  });
+  defaultEnglishKeywordsCache = keywords;
+  return keywords;
+}
+
+export async function loadDefaultEnglishCards(characterId: CharacterId): Promise<ApiCard[]> {
+  const cached = defaultEnglishCardCache.get(characterId);
+  if (cached) return cached;
+  const cards = await fetchJson<ApiCard[]>('/cards', { color: characterId });
+  defaultEnglishCardCache.set(characterId, cards);
   return cards;
 }

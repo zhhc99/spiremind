@@ -178,6 +178,48 @@ function createBigCardStack(card: ApiCard, note: string, upgraded: boolean, edit
   return stack;
 }
 
+function getDeleteConfirmMessage(cardCount: number): string {
+  return getCurrentUiLanguage() === 'zh'
+    ? `这个 Tier 中还有 ${cardCount} 张卡牌。删除后，这些卡牌会回到卡池。`
+    : `This tier still has ${cardCount} card${cardCount === 1 ? '' : 's'}. Deleting it will return them to the card pool.`;
+}
+
+function getSortConfirmMessage(cardCount: number): string {
+  return getCurrentUiLanguage() === 'zh'
+    ? `会按卡池相同的规则，重新排列这个 Tier 中的 ${cardCount} 张卡牌。`
+    : `This will reorder the ${cardCount} card${cardCount === 1 ? '' : 's'} in this tier using the same rules as the card pool.`;
+}
+
+function createDeleteConfirmDialog(cardCount: number): HTMLDivElement {
+  const dialog = document.createElement('div');
+  dialog.className = 'confirm-dialog';
+  dialog.innerHTML = `
+    <div class="confirm-dialog-icon"><span class="material-icons-round">warning</span></div>
+    <div class="confirm-dialog-title">${t(getCurrentUiLanguage(), 'deleteConfirmTitle')}</div>
+    <div class="confirm-dialog-text">${getDeleteConfirmMessage(cardCount)}</div>
+    <div class="confirm-dialog-actions">
+      <button class="confirm-btn text" type="button" data-popup-cancel-delete="true">${t(getCurrentUiLanguage(), 'cancel')}</button>
+      <button class="confirm-btn filled" type="button" data-popup-confirm-delete="true">${t(getCurrentUiLanguage(), 'deleteConfirmAction')}</button>
+    </div>
+  `;
+  return dialog;
+}
+
+function createSortConfirmDialog(cardCount: number): HTMLDivElement {
+  const dialog = document.createElement('div');
+  dialog.className = 'confirm-dialog';
+  dialog.innerHTML = `
+    <div class="confirm-dialog-icon sort"><span class="material-icons-round">sort</span></div>
+    <div class="confirm-dialog-title">${t(getCurrentUiLanguage(), 'sortConfirmTitle')}</div>
+    <div class="confirm-dialog-text">${getSortConfirmMessage(cardCount)}</div>
+    <div class="confirm-dialog-actions">
+      <button class="confirm-btn text" type="button" data-popup-cancel-sort="true">${t(getCurrentUiLanguage(), 'cancel')}</button>
+      <button class="confirm-btn filled" type="button" data-popup-confirm-sort="true">${t(getCurrentUiLanguage(), 'sortConfirmAction')}</button>
+    </div>
+  `;
+  return dialog;
+}
+
 function appendCharacterIcon(target: HTMLElement, imageUrl: string | null): void {
   const createFallback = (): HTMLSpanElement => {
     const icon = document.createElement('span');
@@ -285,7 +327,7 @@ export function renderTierStage(): void {
     row.className = 'tier-row';
     row.draggable = true;
     row.dataset.tierIndex = String(tierIndex);
-    row.innerHTML = `<div class="tier-drag-handle" data-tier-drag-handle="true"><span class="material-icons-round">drag_indicator</span></div><div class="tier-label-wrap" style="--tier-bg:${getTierColor(tierIndex)}"><div class="tier-label" contenteditable spellcheck="false" data-tier-label="${tierIndex}"></div></div><div class="tier-cards" data-tier-index="${tierIndex}"></div><div class="tier-actions"><button class="del-btn" type="button" title="${t(getCurrentUiLanguage(), 'deleteTier')}" data-delete-tier="${tierIndex}"><span class="material-icons-round">delete_outline</span></button></div>`;
+    row.innerHTML = `<div class="tier-drag-handle" data-tier-drag-handle="true"><span class="material-icons-round">drag_indicator</span></div><div class="tier-label-wrap" style="--tier-bg:${getTierColor(tierIndex)}"><div class="tier-label" contenteditable spellcheck="false" data-tier-label="${tierIndex}"></div></div><div class="tier-cards" data-tier-index="${tierIndex}"></div><div class="tier-actions"><button class="del-btn" type="button" title="${t(getCurrentUiLanguage(), 'sortTier')}" data-sort-tier="${tierIndex}"><span class="material-icons-round">sort</span></button><button class="del-btn" type="button" title="${t(getCurrentUiLanguage(), 'deleteTier')}" data-delete-tier="${tierIndex}"><span class="material-icons-round">delete_outline</span></button></div>`;
     row.querySelector<HTMLElement>('[data-tier-label]')!.textContent = tier.label;
     const cardZone = row.querySelector<HTMLDivElement>('.tier-cards')!;
     tier.cards.forEach(cardId => {
@@ -299,10 +341,11 @@ export function renderTierStage(): void {
 export function renderDock(): void {
   const project = ensureCharacterProject(state.project, state.currentCharacter);
   const assigned = new Set(project.tiers.flatMap(tier => tier.cards));
+  const needle = state.search.trim().toLowerCase();
   const cards = sortCards((state.cards[state.currentCharacter] || []).filter(card => !assigned.has(card.id))).filter(card => {
-    const needle = state.search.trim().toLowerCase();
     if (!needle) return true;
-    return card.name.toLowerCase().includes(needle) || card.id.toLowerCase().replaceAll('_', ' ').includes(needle);
+    const searchText = state.searchIndex[card.id] || `${card.name} ${card.id}`.toLowerCase().replaceAll('_', ' ');
+    return searchText.includes(needle);
   });
   dom.dockPanel.classList.toggle('collapsed', state.dockCollapsed);
   dom.dockHeader.title = t(getCurrentUiLanguage(), state.dockCollapsed ? 'dockOpen' : 'dockClose');
@@ -319,6 +362,40 @@ export function renderDock(): void {
 }
 
 export function renderPopup(): void {
+  const sortTierIndex = state.popup.sortTierIndex;
+  if (sortTierIndex != null) {
+    const project = ensureCharacterProject(state.project, state.currentCharacter);
+    const tier = project.tiers[sortTierIndex];
+    if (!tier) {
+      state.popup.sortTierIndex = null;
+      renderPopup();
+      return;
+    }
+    dom.popupOverlay.classList.add('show');
+    dom.popupCard.classList.add('show');
+    dom.popupCard.innerHTML = '';
+    dom.popupCard.appendChild(createSortConfirmDialog(tier.cards.length));
+    const confirmButton = dom.popupCard.querySelector<HTMLButtonElement>('[data-popup-confirm-sort="true"]');
+    if (confirmButton) requestAnimationFrame(() => confirmButton.focus());
+    return;
+  }
+  const deleteTierIndex = state.popup.deleteTierIndex;
+  if (deleteTierIndex != null) {
+    const project = ensureCharacterProject(state.project, state.currentCharacter);
+    const tier = project.tiers[deleteTierIndex];
+    if (!tier) {
+      state.popup.deleteTierIndex = null;
+      renderPopup();
+      return;
+    }
+    dom.popupOverlay.classList.add('show');
+    dom.popupCard.classList.add('show');
+    dom.popupCard.innerHTML = '';
+    dom.popupCard.appendChild(createDeleteConfirmDialog(tier.cards.length));
+    const confirmButton = dom.popupCard.querySelector<HTMLButtonElement>('[data-popup-confirm-delete="true"]');
+    if (confirmButton) requestAnimationFrame(() => confirmButton.focus());
+    return;
+  }
   const card = state.popup.cardId ? findCardById(state.popup.cardId) : null;
   if (!card) {
     dom.popupOverlay.classList.remove('show');
