@@ -198,6 +198,7 @@ export async function exportTierImage(project: CharacterProjectData, cards: ApiC
     clone.querySelector('.tier-drag-handle')?.remove();
     clone.querySelector('.tier-actions')?.remove();
     clone.querySelector('.card-drop-indicator')?.remove();
+    clone.querySelectorAll('.card-note-indicator').forEach(marker => marker.remove());
     const labelWrap = clone.querySelector<HTMLElement>('.tier-label-wrap');
     if (labelWrap) {
       labelWrap.style.width = '56px';

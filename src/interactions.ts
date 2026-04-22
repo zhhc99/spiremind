@@ -3,7 +3,7 @@ import { buildCardSearchIndex, sortCards } from './cards';
 import { CHARACTER_IDS, getUiLanguage, t } from './config';
 import { dom, saveState, state, type ApiCard } from './state';
 import { addTier as appendTier, exportJson, exportMarkdown, exportTierImage, importJson, moveCard, normalizeImportedProject, removeTier, setNote } from './tierlist';
-import { findCardById, getAllCards, getProject, hideHoverPreview, renderAll, renderDock, renderMenus, renderPopup, renderTierStage, setLoading, showHoverPreview, showSnackbar } from './render';
+import { findCardById, getAllCards, getProject, hideHoverPreview, renderAll, renderDock, renderMenus, renderPopup, renderTierStage, setLoading, showHoverPreview, showSnackbar, updateToolbarScrollState } from './render';
 
 type DesktopDrag =
   | { kind: 'card'; cardId: string; sourceElement: HTMLElement }
@@ -39,9 +39,20 @@ let dragHint: HTMLElement | null = null;
 let cardDropIndicator: HTMLElement | null = null;
 let touchDrag: TouchDrag | null = null;
 let tierRowDragArmed = false;
+let toolbarTouchStartX = 0;
+let toolbarEdgeTimer = 0;
 
 function getCurrentUiLanguage() {
   return getUiLanguage(state.apiLang);
+}
+
+function pulseToolbarEdge(side: 'left' | 'right'): void {
+  clearTimeout(toolbarEdgeTimer);
+  dom.toolbarRight.classList.remove('overscroll-left', 'overscroll-right');
+  dom.toolbarRight.classList.add(side === 'left' ? 'overscroll-left' : 'overscroll-right');
+  toolbarEdgeTimer = window.setTimeout(() => {
+    dom.toolbarRight.classList.remove('overscroll-left', 'overscroll-right');
+  }, 180);
 }
 
 function flipRows(rows: HTMLElement[], apply: () => void): void {
@@ -291,6 +302,7 @@ function clearLoadedData(): void {
   state.characters = {};
   state.keywords = {};
   state.cards = {};
+  state.colorlessCards = [];
   state.searchIndex = {};
 }
 
@@ -299,10 +311,12 @@ async function buildCurrentSearchIndex(cards: ApiCard[]): Promise<void> {
   let englishKeywords: Record<string, string> = {};
   if (state.apiLang !== 'eng') {
     try {
-      [englishCards, englishKeywords] = await Promise.all([
+      const [englishCardData, loadedEnglishKeywords] = await Promise.all([
         loadDefaultEnglishCards(state.currentCharacter),
         loadDefaultEnglishKeywords(),
       ]);
+      englishCards = [...englishCardData.characterCards, ...englishCardData.colorlessCards];
+      englishKeywords = loadedEnglishKeywords;
     } catch {
       englishCards = [];
       englishKeywords = {};
@@ -468,9 +482,10 @@ async function loadCurrentData(includeLanguageData: boolean): Promise<void> {
     state.characters = Object.fromEntries(characters.map(character => [character.id, character]));
     state.keywords = keywords;
   }
-  const cards = await loadCards(state.currentCharacter, state.apiLang);
-  state.cards[state.currentCharacter] = cards;
-  await buildCurrentSearchIndex(cards);
+  const { characterCards, colorlessCards } = await loadCards(state.currentCharacter, state.apiLang);
+  state.cards[state.currentCharacter] = characterCards;
+  state.colorlessCards = colorlessCards;
+  await buildCurrentSearchIndex([...characterCards, ...colorlessCards]);
 }
 
 async function applyLoadedState(includeLanguageData: boolean, afterLoad?: () => void, persist = true): Promise<void> {
@@ -537,7 +552,7 @@ async function importProjectFile(file: File): Promise<void> {
     state.currentCharacter = imported.character;
   }
   await applyLoadedState(reloadLanguageData, () => {
-    const validCardIds = new Set((state.cards[state.currentCharacter] || []).map(card => card.id));
+    const validCardIds = new Set(getAllCards().map(card => card.id));
     state.project[state.currentCharacter] = normalizeImportedProject(imported.data, validCardIds);
   });
   showSnackbar(t(getCurrentUiLanguage(), 'jsonImported'));
@@ -598,6 +613,10 @@ export function bindInteractions(): void {
     state.showNoteMarkers = !state.showNoteMarkers;
     renderAllAndSave();
   });
+  dom.includeColorlessBtn.addEventListener('click', () => {
+    state.showColorless = !state.showColorless;
+    renderAllAndSave();
+  });
   dom.themeBtn.addEventListener('click', () => {
     state.theme = state.theme === 'dark' ? 'light' : 'dark';
     renderAllAndSave();
@@ -621,6 +640,17 @@ export function bindInteractions(): void {
     state.search = (event.target as HTMLInputElement).value;
     renderDock();
   });
+  dom.toolbarScroll.addEventListener('scroll', updateToolbarScrollState, { passive: true });
+  dom.toolbarScroll.addEventListener('touchstart', event => {
+    toolbarTouchStartX = event.touches[0]?.clientX || 0;
+  }, { passive: true });
+  dom.toolbarScroll.addEventListener('touchmove', event => {
+    const touchX = event.touches[0]?.clientX || 0;
+    const deltaX = touchX - toolbarTouchStartX;
+    const maxScrollLeft = dom.toolbarScroll.scrollWidth - dom.toolbarScroll.clientWidth;
+    if (dom.toolbarScroll.scrollLeft <= 1 && deltaX > 14) pulseToolbarEdge('left');
+    if (maxScrollLeft - dom.toolbarScroll.scrollLeft <= 1 && deltaX < -14) pulseToolbarEdge('right');
+  }, { passive: true });
   dom.fileInput.addEventListener('change', async event => {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
@@ -942,6 +972,7 @@ export function bindInteractions(): void {
     tierRowDragArmed = false;
   });
   window.addEventListener('resize', () => {
+    updateToolbarScrollState();
     if (!state.openMenu) return;
     renderMenus();
   });

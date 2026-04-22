@@ -56,6 +56,11 @@ function createCardElement(card: ApiCard, hasNote = false): HTMLDivElement {
   name.textContent = card.name;
   shell.appendChild(name);
   item.appendChild(shell);
+  if (card.color === 'colorless') {
+    const indicator = document.createElement('span');
+    indicator.className = 'card-colorless-indicator';
+    item.appendChild(indicator);
+  }
   if (hasNote) {
     const indicator = document.createElement('span');
     indicator.className = 'card-note-indicator material-icons-round';
@@ -257,6 +262,12 @@ export function showSnackbar(message: string): void {
   snackbarTimer = window.setTimeout(() => dom.snackbar.classList.remove('show'), 2400);
 }
 
+export function updateToolbarScrollState(): void {
+  const maxScrollLeft = dom.toolbarScroll.scrollWidth - dom.toolbarScroll.clientWidth;
+  dom.toolbarRight.classList.toggle('has-left-overflow', dom.toolbarScroll.scrollLeft > 1);
+  dom.toolbarRight.classList.toggle('has-right-overflow', maxScrollLeft - dom.toolbarScroll.scrollLeft > 1);
+}
+
 export function renderMenus(): void {
   const currentCharacter = state.characters[state.currentCharacter];
   dom.characterBtn.replaceChildren();
@@ -305,7 +316,12 @@ function renderHeader(): void {
   dom.exportImageText.textContent = t(uiLanguage, 'exportImage');
   dom.addTierText.textContent = t(uiLanguage, 'addTier');
   dom.dockTitle.textContent = t(uiLanguage, 'unclassified');
+  dom.includeColorlessBtn.innerHTML = '<span class="material-icons-round">grain</span>';
+  dom.includeColorlessBtn.classList.toggle('active', state.showColorless);
+  dom.includeColorlessBtn.title = t(uiLanguage, 'includeColorless');
+  dom.includeColorlessBtn.setAttribute('aria-pressed', String(state.showColorless));
   dom.searchInput.placeholder = t(uiLanguage, 'search');
+  dom.searchCompactHint.textContent = t(uiLanguage, 'searchCompact');
   dom.noteMarkersBtn.innerHTML = `<span class="material-icons-round">task_alt</span>`;
   dom.noteMarkersBtn.classList.toggle('active', state.showNoteMarkers);
   dom.noteMarkersBtn.title = t(uiLanguage, state.showNoteMarkers ? 'hideNoteMarkers' : 'showNoteMarkers');
@@ -316,11 +332,12 @@ function renderHeader(): void {
   dom.exportImageBtn.title = t(uiLanguage, 'exportImage');
   dom.themeBtn.title = t(uiLanguage, 'switchTheme');
   renderMenus();
+  requestAnimationFrame(updateToolbarScrollState);
 }
 
 export function renderTierStage(): void {
   const project = ensureCharacterProject(state.project, state.currentCharacter);
-  const cards = new Map((state.cards[state.currentCharacter] || []).map(card => [card.id, card]));
+  const cards = new Map(getAllCards().map(card => [card.id, card]));
   dom.tierStage.innerHTML = '';
   project.tiers.forEach((tier, tierIndex) => {
     const row = document.createElement('div');
@@ -342,7 +359,7 @@ export function renderDock(): void {
   const project = ensureCharacterProject(state.project, state.currentCharacter);
   const assigned = new Set(project.tiers.flatMap(tier => tier.cards));
   const needle = state.search.trim().toLowerCase();
-  const cards = sortCards((state.cards[state.currentCharacter] || []).filter(card => !assigned.has(card.id))).filter(card => {
+  const cards = sortCards(getAllCards().filter(card => !assigned.has(card.id) && (state.showColorless || card.color !== 'colorless'))).filter(card => {
     if (!needle) return true;
     const searchText = state.searchIndex[card.id] || `${card.name} ${card.id}`.toLowerCase().replaceAll('_', ' ');
     return searchText.includes(needle);
@@ -442,7 +459,7 @@ export function renderAll(): void {
 }
 
 export function findCardById(cardId: string): ApiCard | undefined {
-  return (state.cards[state.currentCharacter] || []).find(card => card.id === cardId);
+  return getAllCards().find(card => card.id === cardId);
 }
 
 export function getProject(): CharacterProjectData {
@@ -450,5 +467,5 @@ export function getProject(): CharacterProjectData {
 }
 
 export function getAllCards(): ApiCard[] {
-  return state.cards[state.currentCharacter] || [];
+  return [...(state.cards[state.currentCharacter] || []), ...state.colorlessCards];
 }

@@ -31,6 +31,8 @@ export function getCardHeaderBackground(card: ApiCard): string {
 
 export function sortCards(cards: ApiCard[]): ApiCard[] {
   return cards.slice().sort((left, right) => {
+    const colorDiff = Number(left.color === 'colorless') - Number(right.color === 'colorless');
+    if (colorDiff) return colorDiff;
     const rarityDiff = (RARITY_ORDER[left.rarity_key || 'Status'] ?? 99) - (RARITY_ORDER[right.rarity_key || 'Status'] ?? 99);
     if (rarityDiff) return rarityDiff;
     const costLeft = left.is_x_cost ? 99 : left.cost ?? 999;

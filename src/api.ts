@@ -5,7 +5,7 @@ const characterCache = new Map<string, CharacterInfo[]>();
 const keywordCache = new Map<string, Record<string, string>>();
 const cardCache = new Map<string, ApiCard[]>();
 let defaultEnglishKeywordsCache: Record<string, string> | null = null;
-const defaultEnglishCardCache = new Map<string, ApiCard[]>();
+type CardColor = CharacterId | 'colorless';
 
 async function fetchJson<T>(path: string, params: Record<string, string> = {}): Promise<T> {
   const url = new URL(API_ROOT + path);
@@ -67,13 +67,21 @@ export async function loadKeywords(apiLanguage: string): Promise<Record<string, 
   return keywords;
 }
 
-export async function loadCards(characterId: CharacterId, apiLanguage: string): Promise<ApiCard[]> {
-  const cacheKey = `${apiLanguage}:${characterId}`;
+async function loadCardsByColor(color: CardColor, apiLanguage: string): Promise<ApiCard[]> {
+  const cacheKey = `${apiLanguage}:${color}`;
   const cached = cardCache.get(cacheKey);
   if (cached) return cached;
-  const cards = await fetchJson<ApiCard[]>('/cards', { color: characterId, lang: apiLanguage });
+  const cards = await fetchJson<ApiCard[]>('/cards', { color, lang: apiLanguage });
   cardCache.set(cacheKey, cards);
   return cards;
+}
+
+export async function loadCards(characterId: CharacterId, apiLanguage: string): Promise<{ characterCards: ApiCard[]; colorlessCards: ApiCard[] }> {
+  const [characterCards, colorlessCards] = await Promise.all([
+    loadCardsByColor(characterId, apiLanguage),
+    loadCardsByColor('colorless', apiLanguage),
+  ]);
+  return { characterCards, colorlessCards };
 }
 
 export async function loadDefaultEnglishKeywords(): Promise<Record<string, string>> {
@@ -87,10 +95,10 @@ export async function loadDefaultEnglishKeywords(): Promise<Record<string, strin
   return keywords;
 }
 
-export async function loadDefaultEnglishCards(characterId: CharacterId): Promise<ApiCard[]> {
-  const cached = defaultEnglishCardCache.get(characterId);
-  if (cached) return cached;
-  const cards = await fetchJson<ApiCard[]>('/cards', { color: characterId });
-  defaultEnglishCardCache.set(characterId, cards);
-  return cards;
+export async function loadDefaultEnglishCards(characterId: CharacterId): Promise<{ characterCards: ApiCard[]; colorlessCards: ApiCard[] }> {
+  const [characterCards, colorlessCards] = await Promise.all([
+    loadCardsByColor(characterId, 'eng'),
+    loadCardsByColor('colorless', 'eng'),
+  ]);
+  return { characterCards, colorlessCards };
 }

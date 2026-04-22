@@ -55,6 +55,7 @@ type PersistedState = {
   apiLang?: string;
   currentCharacter?: CharacterId;
   theme?: ThemeMode;
+  showColorless?: boolean;
   showNoteMarkers?: boolean;
   dockCollapsed?: boolean;
   project?: Record<string, CharacterProjectData>;
@@ -63,6 +64,7 @@ type PersistedState = {
 export type State = {
   apiLang: string;
   theme: ThemeMode;
+  showColorless: boolean;
   showNoteMarkers: boolean;
   openMenu: 'character' | 'api-language' | null;
   dockCollapsed: boolean;
@@ -71,6 +73,7 @@ export type State = {
   characters: Record<string, CharacterInfo>;
   keywords: Record<string, string>;
   cards: Record<string, ApiCard[]>;
+  colorlessCards: ApiCard[];
   searchIndex: Record<string, string>;
   project: Record<string, CharacterProjectData>;
   popup: {
@@ -97,6 +100,7 @@ function readSavedState(): PersistedState {
     apiLang: API_LANGUAGES.some(language => language.code === parsed.apiLang) ? parsed.apiLang : undefined,
     currentCharacter: CHARACTER_IDS.includes(parsed.currentCharacter as CharacterId) ? parsed.currentCharacter : undefined,
     theme: parsed.theme === 'light' || parsed.theme === 'dark' ? parsed.theme : undefined,
+    showColorless: typeof parsed.showColorless === 'boolean' ? parsed.showColorless : undefined,
     showNoteMarkers: typeof parsed.showNoteMarkers === 'boolean' ? parsed.showNoteMarkers : undefined,
     dockCollapsed: typeof parsed.dockCollapsed === 'boolean' ? parsed.dockCollapsed : undefined,
     project: parsed.project && typeof parsed.project === 'object' && !Array.isArray(parsed.project) ? parsed.project : undefined,
@@ -113,6 +117,7 @@ const saved = readSavedState();
 export const state: State = {
   apiLang: saved.apiLang || detectInitialApiLanguage(),
   theme: getInitialTheme(saved.theme),
+  showColorless: saved.showColorless ?? false,
   showNoteMarkers: saved.showNoteMarkers ?? false,
   openMenu: null,
   dockCollapsed: saved.dockCollapsed ?? false,
@@ -121,6 +126,7 @@ export const state: State = {
   characters: {},
   keywords: {},
   cards: {},
+  colorlessCards: [],
   searchIndex: {},
   project: saved.project || {},
   popup: {
@@ -136,6 +142,8 @@ export const dom = {
   loadingOverlay: must<HTMLDivElement>('loadingOverlay'),
   loadingText: must<HTMLDivElement>('loadingText'),
   appTitle: must<HTMLDivElement>('appTitle'),
+  toolbarRight: must<HTMLDivElement>('toolbarRight'),
+  toolbarScroll: must<HTMLDivElement>('toolbarScroll'),
   characterBtn: must<HTMLButtonElement>('characterBtn'),
   characterMenu: must<HTMLDivElement>('characterMenu'),
   importJsonBtn: must<HTMLButtonElement>('importJsonBtn'),
@@ -157,7 +165,9 @@ export const dom = {
   dockHeader: must<HTMLDivElement>('dockHeader'),
   dockTitle: must<HTMLDivElement>('dockTitle'),
   dockCount: must<HTMLDivElement>('dockCount'),
+  includeColorlessBtn: must<HTMLButtonElement>('includeColorlessBtn'),
   searchInput: must<HTMLInputElement>('searchInput'),
+  searchCompactHint: must<HTMLSpanElement>('searchCompactHint'),
   dockCards: must<HTMLDivElement>('dockCards'),
   hoverPreview: must<HTMLDivElement>('hoverPreview'),
   popupOverlay: must<HTMLDivElement>('popupOverlay'),
@@ -171,6 +181,7 @@ export function saveState(): void {
     apiLang: state.apiLang,
     currentCharacter: state.currentCharacter,
     theme: state.theme,
+    showColorless: state.showColorless,
     showNoteMarkers: state.showNoteMarkers,
     dockCollapsed: state.dockCollapsed,
     project: state.project,
