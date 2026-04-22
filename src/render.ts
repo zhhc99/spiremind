@@ -12,7 +12,12 @@ function getCurrentUiLanguage() {
 function fitDropdownMenu(menu: HTMLElement): void {
   menu.style.setProperty('--menu-shift-x', '0px');
   if (!menu.classList.contains('open')) return;
-  const gap = 8;
+  const gap = 16;
+  if (menu === dom.apiLanguageMenu) {
+    const rect = dom.apiLanguageBtn.getBoundingClientRect();
+    menu.style.top = `${rect.bottom + 4}px`;
+    menu.style.left = `${rect.left}px`;
+  }
   const rect = menu.getBoundingClientRect();
   let shift = 0;
   if (rect.right > window.innerWidth - gap) shift -= rect.right - (window.innerWidth - gap);
