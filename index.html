@@ -317,6 +317,10 @@ button,input,textarea{font:inherit}
 .char-btn:hover{background:var(--md-sys-color-surface-variant)}
 .char-btn img{width:24px;height:24px;object-fit:contain}
 .char-btn .material-icons-round{font-size:20px}
+.version-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;height:36px;min-width:88px;padding:0 10px;border-radius:999px;border:1px solid var(--md-sys-color-outline-variant);background:var(--md-sys-color-surface-container-high);color:var(--md-sys-color-on-surface-variant);cursor:pointer;white-space:nowrap;transition:background .2s,color .2s,border-color .2s,box-shadow .2s}
+.version-btn:hover,.version-btn[aria-expanded="true"]{background:var(--md-sys-color-primary-container);color:var(--md-sys-color-primary);border-color:color-mix(in srgb,var(--md-sys-color-primary) 34%,transparent);box-shadow:var(--md-sys-elevation-1)}
+.version-btn .material-icons-round{font-size:17px}
+.version-btn-label{font-size:.72rem;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:.01em}
 .toolbar-right{position:relative;display:flex;align-items:center;min-width:0;flex:1 1 auto;margin-left:auto;justify-content:flex-end;overflow:hidden}
 .toolbar-right::before,.toolbar-right::after{position:absolute;top:0;bottom:0;width:28px;display:flex;align-items:center;pointer-events:none;opacity:0;transition:opacity .18s ease,width .18s ease,transform .18s ease,color .18s ease;z-index:2;font-size:18px;font-weight:700;color:color-mix(in srgb,var(--md-sys-color-primary) 72%,var(--md-sys-color-on-surface-variant));text-shadow:0 1px 2px rgba(0,0,0,.08)}
 .toolbar-right::before{content:"‹";left:0;justify-content:flex-start;padding-left:4px;background:linear-gradient(90deg,color-mix(in srgb,var(--md-sys-color-surface-container) 98%,transparent),transparent)}
@@ -352,6 +356,14 @@ button,input,textarea{font:inherit}
 .dropdown-menu .material-icons-round{font-size:18px}
 .lang-menu{right:auto;left:0;transform-origin:top left}
 #apiLanguageMenu{position:fixed;top:0;left:0;margin-top:0}
+.version-menu{position:fixed;top:0;left:0;right:auto;margin-top:0;min-width:210px;transform-origin:top left}
+.dropdown-menu button.version-option{justify-content:space-between;gap:16px;padding:10px 12px}
+.version-option-text{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0}
+.version-option-channel{font-size:.84rem;font-weight:600}
+.version-option-number{font-size:.72rem;color:var(--md-sys-color-on-surface-variant);font-variant-numeric:tabular-nums}
+.version-option.selected .version-option-number{color:inherit;opacity:.78}
+.version-option-check{opacity:0;color:var(--md-sys-color-primary);font-size:18px;flex-shrink:0}
+.version-option.selected .version-option-check{opacity:1}
 .main-content{flex:1;padding:16px;display:flex;flex-direction:column;gap:12px;padding-bottom:0}
 .tier-rows{display:flex;flex-direction:column;gap:12px}
 .tier-row{display:flex;align-items:stretch;border-radius:var(--md-sys-shape-corner-medium);background:var(--md-sys-color-surface-container-low);border:1px solid var(--md-sys-color-outline-variant);overflow:hidden;min-height:100px;transition:box-shadow .25s ease,border-color .25s ease,opacity .3s ease,transform .22s cubic-bezier(.4,0,.2,1);position:relative}
@@ -477,7 +489,7 @@ button,input,textarea{font:inherit}
 .loading-spinner{width:48px;height:48px;border:4px solid var(--md-sys-color-outline-variant);border-top-color:var(--md-sys-color-primary);border-radius:50%;animation:spin 1s linear infinite}
 .empty-tip{display:flex;align-items:center;justify-content:center;width:100%;min-height:84px;border-radius:var(--md-sys-shape-corner-medium);background:var(--md-sys-color-surface-container-low);border:1px dashed var(--md-sys-color-outline-variant);color:var(--md-sys-color-on-surface-variant);font-size:.82rem;text-align:center;padding:12px}
 @keyframes spin{to{transform:rotate(360deg)}}
-@media(max-width:600px){:root{--tier-card-width:64px;--tier-label-width:52px;--tier-cards-width:auto;--tier-actions-width:auto}.top-app-bar{padding:0 12px;gap:8px;min-height:52px}.app-title{font-size:1rem;min-width:0;overflow:hidden;text-overflow:ellipsis}.tonal-btn{padding:0 10px;height:34px;min-width:36px}.main-content{padding:12px 12px 0;gap:10px}.tier-label{font-size:1.2rem}.tier-cards{flex:1 1 auto}.card-name{font-size:.65rem}.unclassified-panel{max-height:50vh}.unclassified-panel.collapsed{max-height:44px}.search-field{height:28px}.bigcard-tooltip{max-width:240px}.popup-card{width:min(320px,calc(100vw - 20px));padding:12px}}
+@media(max-width:600px){:root{--tier-card-width:64px;--tier-label-width:52px;--tier-cards-width:auto;--tier-actions-width:auto}.top-app-bar{padding:0 12px;gap:8px;min-height:52px}.app-title{font-size:1rem;min-width:0;overflow:hidden;text-overflow:ellipsis}.version-btn{height:34px;min-width:88px;padding:0 8px;gap:4px}.version-btn .material-icons-round{font-size:16px}.version-btn-label{font-size:.68rem}.version-menu{min-width:200px;max-width:calc(100vw - 24px)}.tonal-btn{padding:0 10px;height:34px;min-width:36px}.main-content{padding:12px 12px 0;gap:10px}.tier-label{font-size:1.2rem}.tier-cards{flex:1 1 auto}.card-name{font-size:.65rem}.unclassified-panel{max-height:50vh}.unclassified-panel.collapsed{max-height:44px}.search-field{height:28px}.bigcard-tooltip{max-width:240px}.popup-card{width:min(320px,calc(100vw - 20px));padding:12px}}
 </style>
 </head>
 <body>
@@ -488,6 +500,10 @@ button,input,textarea{font:inherit}
     <div class="char-select-wrap">
       <button class="char-btn" id="characterBtn" title=""><span class="material-icons-round">person</span></button>
       <div class="dropdown-menu" id="characterMenu"></div>
+    </div>
+    <div class="char-select-wrap version-select-wrap">
+      <button class="version-btn" id="dataVersionBtn" type="button" title="" aria-haspopup="menu" aria-expanded="false"><span class="material-icons-round">update</span><span class="version-btn-label" id="dataVersionText"></span></button>
+      <div class="dropdown-menu version-menu" id="dataVersionMenu" role="menu"></div>
     </div>
     <div class="toolbar-right" id="toolbarRight">
       <div class="toolbar-scroll" id="toolbarScroll">

@@ -1,8 +1,8 @@
-import { isSupportedApiLanguage, loadCards, loadCharacters, loadDefaultEnglishCards, loadDefaultEnglishKeywords, loadKeywords } from './api';
+import { isSupportedApiLanguage, loadCards, loadCharacters, loadDataVersions, loadDefaultEnglishCards, loadDefaultEnglishKeywords, loadKeywords } from './api';
 import { buildCardSearchIndex, sortCards } from './cards';
-import { CHARACTER_IDS, getUiLanguage, t } from './config';
+import { CHARACTER_IDS, getUiLanguage, t, type DataChannel } from './config';
 import { dom, saveState, state, type ApiCard } from './state';
-import { addTier as appendTier, exportJson, exportMarkdown, exportTierImage, importJson, moveCard, normalizeImportedProject, removeTier, setNote } from './tierlist';
+import { addTier as appendTier, exportJson, exportMarkdown, exportTierImage, getProjectKey, importJson, moveCard, normalizeImportedProject, removeTier, setNote } from './tierlist';
 import { findCardById, getAllCards, getProject, hideHoverPreview, renderAll, renderDock, renderMenus, renderPopup, renderTierStage, setLoading, showHoverPreview, showSnackbar, updateToolbarScrollState } from './render';
 
 type DesktopDrag =
@@ -44,6 +44,11 @@ let toolbarEdgeTimer = 0;
 
 function getCurrentUiLanguage() {
   return getUiLanguage(state.apiLang);
+}
+
+function getCurrentDataVersionLabel(): string {
+  const channel = t(getCurrentUiLanguage(), state.dataChannel === 'stable' ? 'stableChannel' : 'betaChannel');
+  return `${channel} ${state.dataVersions[state.dataChannel]}`;
 }
 
 function pulseToolbarEdge(side: 'left' | 'right'): void {
@@ -109,7 +114,7 @@ function closeMenus(): void {
   renderMenus();
 }
 
-function toggleMenu(menu: 'character' | 'api-language'): void {
+function toggleMenu(menu: 'character' | 'api-language' | 'data-version'): void {
   state.openMenu = state.openMenu === menu ? null : menu;
   renderMenus();
 }
@@ -312,8 +317,8 @@ async function buildCurrentSearchIndex(cards: ApiCard[]): Promise<void> {
   if (state.apiLang !== 'eng') {
     try {
       const [englishCardData, loadedEnglishKeywords] = await Promise.all([
-        loadDefaultEnglishCards(state.currentCharacter),
-        loadDefaultEnglishKeywords(),
+        loadDefaultEnglishCards(state.currentCharacter, state.dataChannel),
+        loadDefaultEnglishKeywords(state.dataChannel),
       ]);
       englishCards = [...englishCardData.characterCards, ...englishCardData.colorlessCards];
       englishKeywords = loadedEnglishKeywords;
@@ -478,11 +483,16 @@ function finishTouchDrag(clientX: number, clientY: number, cancelled = false): v
 async function loadCurrentData(includeLanguageData: boolean): Promise<void> {
   setLoading(t(getCurrentUiLanguage(), 'loadingData'), true);
   if (includeLanguageData) {
-    const [characters, keywords] = await Promise.all([loadCharacters(state.apiLang), loadKeywords(state.apiLang)]);
+    const [characters, keywords, dataVersions] = await Promise.all([
+      loadCharacters(state.apiLang, state.dataChannel),
+      loadKeywords(state.apiLang, state.dataChannel),
+      loadDataVersions(),
+    ]);
     state.characters = Object.fromEntries(characters.map(character => [character.id, character]));
     state.keywords = keywords;
+    state.dataVersions = dataVersions;
   }
-  const { characterCards, colorlessCards } = await loadCards(state.currentCharacter, state.apiLang);
+  const { characterCards, colorlessCards } = await loadCards(state.currentCharacter, state.apiLang, state.dataChannel);
   state.cards[state.currentCharacter] = characterCards;
   state.colorlessCards = colorlessCards;
   await buildCurrentSearchIndex([...characterCards, ...colorlessCards]);
@@ -524,6 +534,19 @@ async function selectApiLanguage(apiLanguage: string): Promise<void> {
   await applyLoadedState(true);
 }
 
+async function selectDataChannel(dataChannel: string): Promise<void> {
+  if (dataChannel !== 'stable' && dataChannel !== 'beta') throw new Error(`Unsupported data channel: ${dataChannel}`);
+  if (dataChannel === state.dataChannel) {
+    closeMenus();
+    return;
+  }
+  resetViewState();
+  state.dataChannel = dataChannel as DataChannel;
+  clearLoadedData();
+  closeMenus();
+  await applyLoadedState(true);
+}
+
 function download(filename: string, blob: Blob): void {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
@@ -541,19 +564,23 @@ async function importProjectFile(file: File): Promise<void> {
   const text = await file.text();
   const imported = importJson(text);
   resetViewState();
+  const importedDataChannel = imported.dataChannel || 'stable';
   const importedLanguage = imported.language;
   const reloadLanguageData = !!(importedLanguage && isSupportedApiLanguage(importedLanguage) && importedLanguage !== state.apiLang);
-  if (reloadLanguageData) {
-    state.apiLang = importedLanguage;
-    clearLoadedData();
+  const reloadVersionData = importedDataChannel !== state.dataChannel;
+  if (imported.gameVersion && imported.gameVersion !== state.dataVersions[importedDataChannel]) {
+    throw new Error(`Unsupported game version: ${imported.gameVersion}`);
   }
+  if (reloadLanguageData) state.apiLang = importedLanguage;
+  state.dataChannel = importedDataChannel;
+  if (reloadLanguageData || reloadVersionData) clearLoadedData();
   if (imported.character) {
     if (!CHARACTER_IDS.includes(imported.character)) throw new Error(`Unsupported character: ${imported.character}`);
     state.currentCharacter = imported.character;
   }
-  await applyLoadedState(reloadLanguageData, () => {
+  await applyLoadedState(reloadLanguageData || reloadVersionData, () => {
     const validCardIds = new Set(getAllCards().map(card => card.id));
-    state.project[state.currentCharacter] = normalizeImportedProject(imported.data, validCardIds);
+    state.project[getProjectKey(state.dataChannel, state.currentCharacter)] = normalizeImportedProject(imported.data, validCardIds);
   });
   showSnackbar(t(getCurrentUiLanguage(), 'jsonImported'));
 }
@@ -572,7 +599,8 @@ function closePopup(): void {
 function exportCurrentJson(): void {
   const project = getProject();
   const name = state.characters[state.currentCharacter]?.name || state.currentCharacter;
-  download(`${fileSafeName(name)}.json`, new Blob([exportJson(state.currentCharacter, state.apiLang, project)], { type: 'application/json;charset=utf-8' }));
+  const gameVersion = state.dataVersions[state.dataChannel];
+  download(`${fileSafeName(name)}-${gameVersion}.json`, new Blob([exportJson(state.currentCharacter, state.apiLang, state.dataChannel, gameVersion, project)], { type: 'application/json;charset=utf-8' }));
   showSnackbar(t(getCurrentUiLanguage(), 'jsonExported'));
 }
 
@@ -580,7 +608,8 @@ function exportCurrentMarkdown(): void {
   const project = getProject();
   const cards = getAllCards();
   const name = state.characters[state.currentCharacter]?.name || state.currentCharacter;
-  download(`${fileSafeName(name)}.md`, new Blob([exportMarkdown(name, project, cards, getCurrentUiLanguage())], { type: 'text/markdown;charset=utf-8' }));
+  const gameVersion = state.dataVersions[state.dataChannel];
+  download(`${fileSafeName(name)}-${gameVersion}.md`, new Blob([exportMarkdown(name, getCurrentDataVersionLabel(), project, cards, getCurrentUiLanguage())], { type: 'text/markdown;charset=utf-8' }));
   showSnackbar(t(getCurrentUiLanguage(), 'markdownExported'));
 }
 
@@ -592,8 +621,9 @@ async function exportCurrentImage(): Promise<void> {
   try {
     showSnackbar(t(getCurrentUiLanguage(), 'imageGenerating'));
     const name = state.characters[state.currentCharacter]?.name || state.currentCharacter;
-    const blob = await exportTierImage(getProject(), getAllCards());
-    download(`${fileSafeName(name)}.png`, blob);
+    const gameVersion = state.dataVersions[state.dataChannel];
+    const blob = await exportTierImage(getProject(), getAllCards(), getCurrentDataVersionLabel());
+    download(`${fileSafeName(name)}-${gameVersion}.png`, blob);
     showSnackbar(t(getCurrentUiLanguage(), 'imageExported'));
   } catch {
     showSnackbar(t(getCurrentUiLanguage(), 'imageFailed'));
@@ -608,6 +638,10 @@ export function bindInteractions(): void {
   dom.apiLanguageBtn.addEventListener('click', event => {
     event.stopPropagation();
     toggleMenu('api-language');
+  });
+  dom.dataVersionBtn.addEventListener('click', event => {
+    event.stopPropagation();
+    toggleMenu('data-version');
   });
   dom.noteMarkersBtn.addEventListener('click', () => {
     state.showNoteMarkers = !state.showNoteMarkers;
@@ -673,6 +707,11 @@ export function bindInteractions(): void {
     const button = (event.target as HTMLElement).closest<HTMLElement>('[data-api-language-select]');
     if (!button) return;
     void selectApiLanguage(button.dataset.apiLanguageSelect || '');
+  });
+  dom.dataVersionMenu.addEventListener('click', event => {
+    const button = (event.target as HTMLElement).closest<HTMLElement>('[data-data-channel-select]');
+    if (!button) return;
+    void selectDataChannel(button.dataset.dataChannelSelect || '');
   });
   dom.tierStage.addEventListener('click', event => {
     const sortButton = (event.target as HTMLElement).closest<HTMLElement>('[data-sort-tier]');

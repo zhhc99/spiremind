@@ -1,10 +1,12 @@
-import { DEFAULT_TIER_LABELS, TIER_COLOR_VARS, t, type CharacterId, type UiLanguage } from './config';
+import { DEFAULT_TIER_LABELS, TIER_COLOR_VARS, t, type CharacterId, type DataChannel, type UiLanguage } from './config';
 import { getCardImageUrl } from './cards';
 import type { ApiCard, CharacterProjectData, ProjectTier } from './state';
 
 export type ImportedProject = {
   character: CharacterId | null;
   language: string | null;
+  dataChannel: DataChannel | null;
+  gameVersion: string | null;
   data: CharacterProjectData;
 };
 
@@ -12,11 +14,16 @@ export function createDefaultTiers(): ProjectTier[] {
   return DEFAULT_TIER_LABELS.map(label => ({ label, cards: [] }));
 }
 
-export function ensureCharacterProject(project: Record<string, CharacterProjectData>, characterId: CharacterId): CharacterProjectData {
-  if (!project[characterId]) project[characterId] = { tiers: createDefaultTiers(), notes: {} };
-  if (!Array.isArray(project[characterId].tiers) || project[characterId].tiers.length === 0) project[characterId].tiers = createDefaultTiers();
-  if (!project[characterId].notes) project[characterId].notes = {};
-  return project[characterId];
+export function getProjectKey(dataChannel: DataChannel, characterId: CharacterId): string {
+  return `${dataChannel}:${characterId}`;
+}
+
+export function ensureCharacterProject(project: Record<string, CharacterProjectData>, dataChannel: DataChannel, characterId: CharacterId): CharacterProjectData {
+  const key = getProjectKey(dataChannel, characterId);
+  if (!project[key]) project[key] = { tiers: createDefaultTiers(), notes: {} };
+  if (!Array.isArray(project[key].tiers) || project[key].tiers.length === 0) project[key].tiers = createDefaultTiers();
+  if (!project[key].notes) project[key].notes = {};
+  return project[key];
 }
 
 export function getTierColor(index: number): string {
@@ -62,11 +69,13 @@ export function setNote(project: CharacterProjectData, cardId: string, text: str
   project.notes[cardId] = normalized;
 }
 
-export function exportJson(characterId: CharacterId, apiLanguage: string, project: CharacterProjectData): string {
+export function exportJson(characterId: CharacterId, apiLanguage: string, dataChannel: DataChannel, gameVersion: string, project: CharacterProjectData): string {
   return `${JSON.stringify({
-    version: 1,
+    version: 2,
     character: characterId,
     language: apiLanguage,
+    dataChannel,
+    gameVersion,
     tiers: project.tiers,
     notes: Object.fromEntries(Object.entries(project.notes).sort(([left], [right]) => left.localeCompare(right))),
   }, null, 2)}\n`;
@@ -76,6 +85,8 @@ export function importJson(text: string): ImportedProject {
   const raw = JSON.parse(text) as {
     character?: CharacterId | null;
     language?: string | null;
+    dataChannel?: DataChannel | null;
+    gameVersion?: string | null;
     tiers?: Array<{ label?: unknown; cards?: unknown }>;
     notes?: Record<string, unknown>;
   };
@@ -92,6 +103,8 @@ export function importJson(text: string): ImportedProject {
   return {
     character: raw.character ?? null,
     language: raw.language ?? null,
+    dataChannel: raw.dataChannel === 'stable' || raw.dataChannel === 'beta' ? raw.dataChannel : null,
+    gameVersion: typeof raw.gameVersion === 'string' ? raw.gameVersion : null,
     data: { tiers, notes },
   };
 }
@@ -116,10 +129,10 @@ export function normalizeImportedProject(project: CharacterProjectData, validCar
   return { tiers, notes };
 }
 
-export function exportMarkdown(characterName: string, project: CharacterProjectData, cards: ApiCard[], uiLanguage: UiLanguage): string {
+export function exportMarkdown(characterName: string, versionLabel: string, project: CharacterProjectData, cards: ApiCard[], uiLanguage: UiLanguage): string {
   const cardMap = new Map(cards.map(card => [card.id, card]));
   const assigned = new Set(project.tiers.flatMap(tier => tier.cards));
-  const lines = [`# ${characterName}`, ''];
+  const lines = [`# ${characterName}`, '', `> ${t(uiLanguage, 'gameVersion')}: ${versionLabel}`, ''];
   project.tiers.forEach(tier => {
     lines.push(`## ${tier.label}`);
     lines.push('');
@@ -177,7 +190,7 @@ type Html2Canvas = (element: HTMLElement, options?: {
   imageTimeout?: number;
 }) => Promise<HTMLCanvasElement>;
 
-export async function exportTierImage(project: CharacterProjectData, cards: ApiCard[]): Promise<Blob> {
+export async function exportTierImage(project: CharacterProjectData, cards: ApiCard[], versionLabel: string): Promise<Blob> {
   if (project.tiers.length === 0) throw new Error('No tiers');
   const renderer = (window as Window & { html2canvas?: Html2Canvas }).html2canvas;
   if (!renderer) throw new Error('html2canvas unavailable');
@@ -190,6 +203,10 @@ export async function exportTierImage(project: CharacterProjectData, cards: ApiC
   const exportPadding = 16;
   const container = document.createElement('div');
   container.style.cssText = `width:${exportRowWidth + exportPadding * 2}px;padding:${exportPadding}px;margin:0 auto;background:${backgroundColor};display:flex;flex-direction:column;gap:12px;font-family:system-ui,sans-serif`;
+  const version = document.createElement('div');
+  version.textContent = `${t(document.documentElement.lang === 'zh' ? 'zh' : 'en', 'gameVersion')}: ${versionLabel}`;
+  version.style.cssText = `font-size:12px;font-weight:600;color:${resolveCssValue('--md-sys-color-on-surface-variant')};text-align:right;padding:0 2px`;
+  container.appendChild(version);
   tierRows.forEach((row, tierIndex) => {
     const clone = row.cloneNode(true) as HTMLElement;
     clone.classList.remove('drag-over', 'dragging');

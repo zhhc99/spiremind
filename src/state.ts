@@ -1,4 +1,4 @@
-import { API_LANGUAGES, CHARACTER_IDS, detectInitialApiLanguage, STORAGE_KEY, type CharacterId, type ThemeMode } from './config';
+import { API_LANGUAGES, BETA_DATA_VERSION_FALLBACK, CHARACTER_IDS, detectInitialApiLanguage, STABLE_DATA_VERSION, STORAGE_KEY, type CharacterId, type DataChannel, type ThemeMode } from './config';
 
 export type ApiCard = {
   id: string;
@@ -53,6 +53,7 @@ export type CharacterProjectData = {
 
 type PersistedState = {
   apiLang?: string;
+  dataChannel?: DataChannel;
   currentCharacter?: CharacterId;
   theme?: ThemeMode;
   showColorless?: boolean;
@@ -63,10 +64,12 @@ type PersistedState = {
 
 export type State = {
   apiLang: string;
+  dataChannel: DataChannel;
+  dataVersions: Record<DataChannel, string>;
   theme: ThemeMode;
   showColorless: boolean;
   showNoteMarkers: boolean;
-  openMenu: 'character' | 'api-language' | null;
+  openMenu: 'character' | 'api-language' | 'data-version' | null;
   dockCollapsed: boolean;
   search: string;
   currentCharacter: CharacterId;
@@ -98,13 +101,27 @@ function readSavedState(): PersistedState {
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('Invalid saved state');
   return {
     apiLang: API_LANGUAGES.some(language => language.code === parsed.apiLang) ? parsed.apiLang : undefined,
+    dataChannel: parsed.dataChannel === 'stable' || parsed.dataChannel === 'beta' ? parsed.dataChannel : undefined,
     currentCharacter: CHARACTER_IDS.includes(parsed.currentCharacter as CharacterId) ? parsed.currentCharacter : undefined,
     theme: parsed.theme === 'light' || parsed.theme === 'dark' ? parsed.theme : undefined,
     showColorless: typeof parsed.showColorless === 'boolean' ? parsed.showColorless : undefined,
     showNoteMarkers: typeof parsed.showNoteMarkers === 'boolean' ? parsed.showNoteMarkers : undefined,
     dockCollapsed: typeof parsed.dockCollapsed === 'boolean' ? parsed.dockCollapsed : undefined,
-    project: parsed.project && typeof parsed.project === 'object' && !Array.isArray(parsed.project) ? parsed.project : undefined,
+    project: normalizeSavedProjects(parsed.project),
   };
+}
+
+function normalizeSavedProjects(project: PersistedState['project']): Record<string, CharacterProjectData> | undefined {
+  if (!project || typeof project !== 'object' || Array.isArray(project)) return undefined;
+  const normalized: Record<string, CharacterProjectData> = {};
+  Object.entries(project).forEach(([key, value]) => {
+    if (CHARACTER_IDS.includes(key as CharacterId)) {
+      normalized[`stable:${key}`] = value;
+      return;
+    }
+    if (/^(stable|beta):(ironclad|silent|defect|necrobinder|regent)$/.test(key)) normalized[key] = value;
+  });
+  return normalized;
 }
 
 function getInitialTheme(savedTheme?: ThemeMode): ThemeMode {
@@ -116,6 +133,11 @@ const saved = readSavedState();
 
 export const state: State = {
   apiLang: saved.apiLang || detectInitialApiLanguage(),
+  dataChannel: saved.dataChannel || 'stable',
+  dataVersions: {
+    stable: STABLE_DATA_VERSION,
+    beta: BETA_DATA_VERSION_FALLBACK,
+  },
   theme: getInitialTheme(saved.theme),
   showColorless: saved.showColorless ?? false,
   showNoteMarkers: saved.showNoteMarkers ?? false,
@@ -156,6 +178,9 @@ export const dom = {
   exportImageText: must<HTMLSpanElement>('exportImageText'),
   apiLanguageBtn: must<HTMLButtonElement>('apiLanguageBtn'),
   apiLanguageMenu: must<HTMLDivElement>('apiLanguageMenu'),
+  dataVersionBtn: must<HTMLButtonElement>('dataVersionBtn'),
+  dataVersionText: must<HTMLSpanElement>('dataVersionText'),
+  dataVersionMenu: must<HTMLDivElement>('dataVersionMenu'),
   noteMarkersBtn: must<HTMLButtonElement>('noteMarkersBtn'),
   themeBtn: must<HTMLButtonElement>('themeBtn'),
   tierStage: must<HTMLDivElement>('tierRows'),
@@ -179,6 +204,7 @@ export const dom = {
 export function saveState(): void {
   const payload: PersistedState = {
     apiLang: state.apiLang,
+    dataChannel: state.dataChannel,
     currentCharacter: state.currentCharacter,
     theme: state.theme,
     showColorless: state.showColorless,

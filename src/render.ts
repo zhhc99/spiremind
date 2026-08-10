@@ -1,4 +1,4 @@
-import { API_LANGUAGES, CHARACTER_ACCENTS, getUiLanguage, t } from './config';
+import { API_LANGUAGES, CHARACTER_ACCENTS, getUiLanguage, t, type DataChannel } from './config';
 import { buildCardDescription, getCardBorderColor, getCardCost, getCardHeaderBackground, getCardImageUrl, getCardStarCost, renderRichText, sortCards } from './cards';
 import { dom, state, type ApiCard, type CharacterProjectData } from './state';
 import { ensureCharacterProject, getTierColor } from './tierlist';
@@ -13,8 +13,13 @@ function fitDropdownMenu(menu: HTMLElement): void {
   menu.style.setProperty('--menu-shift-x', '0px');
   if (!menu.classList.contains('open')) return;
   const gap = 16;
-  if (menu === dom.apiLanguageMenu) {
-    const rect = dom.apiLanguageBtn.getBoundingClientRect();
+  const fixedAnchor = menu === dom.apiLanguageMenu
+    ? dom.apiLanguageBtn
+    : menu === dom.dataVersionMenu
+      ? dom.dataVersionBtn
+      : null;
+  if (fixedAnchor) {
+    const rect = fixedAnchor.getBoundingClientRect();
     menu.style.top = `${rect.bottom + 4}px`;
     menu.style.left = `${rect.left}px`;
   }
@@ -25,6 +30,15 @@ function fitDropdownMenu(menu: HTMLElement): void {
   menu.style.setProperty('--menu-shift-x', `${shift}px`);
 }
 
+function applyCardImage(image: HTMLImageElement, card: ApiCard, onError: () => void): boolean {
+  const imageUrl = getCardImageUrl(card);
+  if (!imageUrl) return false;
+  image.crossOrigin = 'anonymous';
+  image.addEventListener('error', onError);
+  image.src = imageUrl;
+  return true;
+}
+
 function createCardElement(card: ApiCard, hasNote = false): HTMLDivElement {
   const item = document.createElement('div');
   item.className = 'card-item';
@@ -33,22 +47,18 @@ function createCardElement(card: ApiCard, hasNote = false): HTMLDivElement {
   item.style.setProperty('--rarity-color', getCardBorderColor(card));
   const shell = document.createElement('div');
   shell.className = 'card-shell';
-  const imageUrl = getCardImageUrl(card);
-  if (imageUrl) {
-    const image = document.createElement('img');
-    image.className = 'card-img';
-    image.alt = card.name;
-    image.loading = 'lazy';
-    image.src = imageUrl;
-    image.crossOrigin = 'anonymous';
-    image.addEventListener('error', () => {
-      shell.querySelector('.card-top')?.remove();
-      const placeholder = document.createElement('div');
-      placeholder.className = 'card-placeholder card-top';
-      placeholder.innerHTML = '<span class="material-icons-round">style</span>';
-      shell.prepend(placeholder);
-    });
-    image.classList.add('card-top');
+  const image = document.createElement('img');
+  image.className = 'card-img card-top';
+  image.alt = card.name;
+  image.loading = 'lazy';
+  const hasImage = applyCardImage(image, card, () => {
+    shell.querySelector('.card-top')?.remove();
+    const placeholder = document.createElement('div');
+    placeholder.className = 'card-placeholder card-top';
+    placeholder.innerHTML = '<span class="material-icons-round">style</span>';
+    shell.prepend(placeholder);
+  });
+  if (hasImage) {
     shell.appendChild(image);
   } else {
     const placeholder = document.createElement('div');
@@ -113,15 +123,12 @@ function createBigCard(card: ApiCard, upgraded: boolean, editable: boolean): HTM
   }
   const imageWrap = document.createElement('div');
   imageWrap.className = 'bigcard-img-wrap';
-  const imageUrl = getCardImageUrl(card);
-  if (imageUrl) {
-    const image = document.createElement('img');
-    image.alt = card.name;
-    image.src = imageUrl;
-    image.crossOrigin = 'anonymous';
-    image.addEventListener('error', () => {
-      imageWrap.innerHTML = '<div class="card-placeholder"><span class="material-icons-round">style</span></div>';
-    });
+  const image = document.createElement('img');
+  image.alt = card.name;
+  const hasImage = applyCardImage(image, card, () => {
+    imageWrap.innerHTML = '<div class="card-placeholder"><span class="material-icons-round">style</span></div>';
+  });
+  if (hasImage) {
     imageWrap.appendChild(image);
   } else {
     imageWrap.innerHTML = '<div class="card-placeholder"><span class="material-icons-round">style</span></div>';
@@ -304,9 +311,40 @@ export function renderMenus(): void {
   dom.apiLanguageMenu.classList.toggle('open', state.openMenu === 'api-language');
   dom.apiLanguageBtn.setAttribute('aria-expanded', String(state.openMenu === 'api-language'));
   dom.apiLanguageBtn.title = t(getCurrentUiLanguage(), 'apiLanguage');
+  dom.dataVersionText.textContent = state.dataVersions[state.dataChannel];
+  dom.dataVersionMenu.innerHTML = '';
+  (['stable', 'beta'] satisfies DataChannel[]).forEach(dataChannel => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'version-option';
+    item.dataset.dataChannelSelect = dataChannel;
+    item.setAttribute('role', 'menuitemradio');
+    item.setAttribute('aria-checked', String(dataChannel === state.dataChannel));
+    if (dataChannel === state.dataChannel) item.classList.add('selected');
+    const text = document.createElement('span');
+    text.className = 'version-option-text';
+    const channel = document.createElement('span');
+    channel.className = 'version-option-channel';
+    channel.textContent = t(getCurrentUiLanguage(), dataChannel === 'stable' ? 'stableChannel' : 'betaChannel');
+    const version = document.createElement('span');
+    version.className = 'version-option-number';
+    version.textContent = state.dataVersions[dataChannel];
+    text.append(channel, version);
+    const check = document.createElement('span');
+    check.className = 'material-icons-round version-option-check';
+    check.textContent = 'check';
+    item.append(text, check);
+    dom.dataVersionMenu.appendChild(item);
+  });
+  dom.dataVersionMenu.classList.toggle('open', state.openMenu === 'data-version');
+  dom.dataVersionBtn.setAttribute('aria-expanded', String(state.openMenu === 'data-version'));
+  const channelLabel = t(getCurrentUiLanguage(), state.dataChannel === 'stable' ? 'stableChannel' : 'betaChannel');
+  dom.dataVersionBtn.title = `${t(getCurrentUiLanguage(), 'gameVersion')}: ${channelLabel} ${state.dataVersions[state.dataChannel]}`;
+  dom.dataVersionBtn.setAttribute('aria-label', dom.dataVersionBtn.title);
   requestAnimationFrame(() => {
     fitDropdownMenu(dom.characterMenu);
     fitDropdownMenu(dom.apiLanguageMenu);
+    fitDropdownMenu(dom.dataVersionMenu);
   });
 }
 
@@ -341,7 +379,7 @@ function renderHeader(): void {
 }
 
 export function renderTierStage(): void {
-  const project = ensureCharacterProject(state.project, state.currentCharacter);
+  const project = ensureCharacterProject(state.project, state.dataChannel, state.currentCharacter);
   const cards = new Map(getAllCards().map(card => [card.id, card]));
   dom.tierStage.innerHTML = '';
   project.tiers.forEach((tier, tierIndex) => {
@@ -361,7 +399,7 @@ export function renderTierStage(): void {
 }
 
 export function renderDock(): void {
-  const project = ensureCharacterProject(state.project, state.currentCharacter);
+  const project = ensureCharacterProject(state.project, state.dataChannel, state.currentCharacter);
   const assigned = new Set(project.tiers.flatMap(tier => tier.cards));
   const needle = state.search.trim().toLowerCase();
   const cards = sortCards(getAllCards().filter(card => !assigned.has(card.id) && (state.showColorless || card.color !== 'colorless'))).filter(card => {
@@ -386,7 +424,7 @@ export function renderDock(): void {
 export function renderPopup(): void {
   const sortTierIndex = state.popup.sortTierIndex;
   if (sortTierIndex != null) {
-    const project = ensureCharacterProject(state.project, state.currentCharacter);
+    const project = ensureCharacterProject(state.project, state.dataChannel, state.currentCharacter);
     const tier = project.tiers[sortTierIndex];
     if (!tier) {
       state.popup.sortTierIndex = null;
@@ -403,7 +441,7 @@ export function renderPopup(): void {
   }
   const deleteTierIndex = state.popup.deleteTierIndex;
   if (deleteTierIndex != null) {
-    const project = ensureCharacterProject(state.project, state.currentCharacter);
+    const project = ensureCharacterProject(state.project, state.dataChannel, state.currentCharacter);
     const tier = project.tiers[deleteTierIndex];
     if (!tier) {
       state.popup.deleteTierIndex = null;
@@ -425,7 +463,7 @@ export function renderPopup(): void {
     dom.popupCard.innerHTML = '';
     return;
   }
-  const project = ensureCharacterProject(state.project, state.currentCharacter);
+  const project = ensureCharacterProject(state.project, state.dataChannel, state.currentCharacter);
   dom.popupOverlay.classList.add('show');
   dom.popupCard.classList.add('show');
   dom.popupCard.innerHTML = '';
@@ -435,7 +473,7 @@ export function renderPopup(): void {
 }
 
 export function showHoverPreview(card: ApiCard, left: number, top: number, upgraded: boolean): void {
-  const project = ensureCharacterProject(state.project, state.currentCharacter);
+  const project = ensureCharacterProject(state.project, state.dataChannel, state.currentCharacter);
   dom.hoverPreview.innerHTML = '';
   dom.hoverPreview.appendChild(createBigCardStack(card, project.notes[card.id] || '', upgraded, false));
   dom.hoverPreview.classList.add('visible');
@@ -468,7 +506,7 @@ export function findCardById(cardId: string): ApiCard | undefined {
 }
 
 export function getProject(): CharacterProjectData {
-  return ensureCharacterProject(state.project, state.currentCharacter);
+  return ensureCharacterProject(state.project, state.dataChannel, state.currentCharacter);
 }
 
 export function getAllCards(): ApiCard[] {

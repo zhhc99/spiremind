@@ -1,4 +1,5 @@
-import { API_ORIGIN, CHARACTER_ACCENTS, type CharacterId } from './config';
+import { resolveAssetUrl } from './assets';
+import { CHARACTER_ACCENTS, type CharacterId } from './config';
 import type { ApiCard } from './state';
 
 const RARITY_ORDER: Record<string, number> = { Basic: 0, Common: 1, Uncommon: 2, Rare: 3, Ancient: 4, Status: 5 };
@@ -6,8 +7,7 @@ const TYPE_ORDER: Record<string, number> = { Attack: 1, Skill: 2, Power: 3 };
 const KEYWORDS_BEFORE = ['UNPLAYABLE', 'INNATE', 'ETHEREAL', 'RETAIN', 'SLY'];
 const KEYWORDS_AFTER = ['EXHAUST', 'ETERNAL'];
 export function getCardImageUrl(card: ApiCard): string {
-  if (!card.image_url) return '';
-  return card.image_url.startsWith('http') ? card.image_url : `${API_ORIGIN}${card.image_url}`;
+  return resolveAssetUrl(card.image_url);
 }
 
 export function getCardBorderColor(card: ApiCard): string {

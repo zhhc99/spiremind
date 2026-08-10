@@ -1,9 +1,13 @@
 export type UiLanguage = 'zh' | 'en';
 export type ThemeMode = 'light' | 'dark';
 export type CharacterId = 'ironclad' | 'silent' | 'defect' | 'necrobinder' | 'regent';
+export type DataChannel = 'stable' | 'beta';
 
 export const API_ROOT = 'https://spire-codex.com/api';
 export const API_ORIGIN = 'https://spire-codex.com';
+export const ASSET_CDN_ORIGIN = 'https://cdn.spire-codex.com';
+export const STABLE_DATA_VERSION = 'v0.107.1';
+export const BETA_DATA_VERSION_FALLBACK = 'v0.110.0';
 export const STORAGE_KEY = 'spiremind-v1';
 export const CHARACTER_IDS: CharacterId[] = ['ironclad', 'silent', 'defect', 'necrobinder', 'regent'];
 export const DEFAULT_TIER_LABELS = ['S', 'A', 'B', 'C', 'D'];
@@ -66,6 +70,9 @@ export const UI_STRINGS = {
     noCards: '没有可显示的卡牌',
     noTierImage: '没有可导出的内容',
     apiLanguage: '卡牌语言',
+    gameVersion: '游戏版本',
+    stableChannel: '稳定版',
+    betaChannel: 'Beta',
     includeColorless: '包含无色',
     showNoteMarkers: '显示注释标记',
     hideNoteMarkers: '隐藏注释标记',
@@ -111,6 +118,9 @@ export const UI_STRINGS = {
     noCards: 'No cards to show',
     noTierImage: 'Nothing to export',
     apiLanguage: 'Card Language',
+    gameVersion: 'Game Version',
+    stableChannel: 'Stable',
+    betaChannel: 'Beta',
     includeColorless: 'Include Colorless',
     showNoteMarkers: 'Show note markers',
     hideNoteMarkers: 'Hide note markers',
