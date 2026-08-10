@@ -20,7 +20,8 @@ export function getProjectKey(dataChannel: DataChannel, characterId: CharacterId
 
 export function ensureCharacterProject(project: Record<string, CharacterProjectData>, dataChannel: DataChannel, characterId: CharacterId): CharacterProjectData {
   const key = getProjectKey(dataChannel, characterId);
-  if (!project[key]) project[key] = { tiers: createDefaultTiers(), notes: {} };
+  if (!project[key]) project[key] = { title: '', tiers: createDefaultTiers(), notes: {} };
+  if (typeof project[key].title !== 'string') project[key].title = '';
   if (!Array.isArray(project[key].tiers) || project[key].tiers.length === 0) project[key].tiers = createDefaultTiers();
   if (!project[key].notes) project[key].notes = {};
   return project[key];
@@ -71,7 +72,8 @@ export function setNote(project: CharacterProjectData, cardId: string, text: str
 
 export function exportJson(characterId: CharacterId, apiLanguage: string, dataChannel: DataChannel, gameVersion: string, project: CharacterProjectData): string {
   return `${JSON.stringify({
-    version: 2,
+    version: 3,
+    title: project.title,
     character: characterId,
     language: apiLanguage,
     dataChannel,
@@ -87,6 +89,7 @@ export function importJson(text: string): ImportedProject {
     language?: string | null;
     dataChannel?: DataChannel | null;
     gameVersion?: string | null;
+    title?: unknown;
     tiers?: Array<{ label?: unknown; cards?: unknown }>;
     notes?: Record<string, unknown>;
   };
@@ -105,7 +108,11 @@ export function importJson(text: string): ImportedProject {
     language: raw.language ?? null,
     dataChannel: raw.dataChannel === 'stable' || raw.dataChannel === 'beta' ? raw.dataChannel : null,
     gameVersion: typeof raw.gameVersion === 'string' ? raw.gameVersion : null,
-    data: { tiers, notes },
+    data: {
+      title: typeof raw.title === 'string' ? raw.title.replace(/\s*\r?\n\s*/g, ' ').trim() : '',
+      tiers,
+      notes,
+    },
   };
 }
 
@@ -126,13 +133,24 @@ export function normalizeImportedProject(project: CharacterProjectData, validCar
     if (!note.trim()) return;
     notes[cardId] = note.replace(/\r\n/g, '\n').trim();
   });
-  return { tiers, notes };
+  return {
+    title: project.title.replace(/\s*\r?\n\s*/g, ' ').trim(),
+    tiers,
+    notes,
+  };
 }
 
-export function exportMarkdown(characterName: string, versionLabel: string, project: CharacterProjectData, cards: ApiCard[], uiLanguage: UiLanguage): string {
+export function exportMarkdown(characterName: string, versionLabel: string, project: CharacterProjectData, cards: ApiCard[], poolCards: ApiCard[], uiLanguage: UiLanguage): string {
   const cardMap = new Map(cards.map(card => [card.id, card]));
   const assigned = new Set(project.tiers.flatMap(tier => tier.cards));
-  const lines = [`# ${characterName}`, '', `> ${t(uiLanguage, 'gameVersion')}: ${versionLabel}`, ''];
+  const title = project.title.trim() || characterName;
+  const lines = [
+    `# ${title}`,
+    '',
+    `> ${t(uiLanguage, 'character')}: ${characterName}`,
+    `> ${t(uiLanguage, 'gameVersion')}: ${versionLabel}`,
+    '',
+  ];
   project.tiers.forEach(tier => {
     lines.push(`## ${tier.label}`);
     lines.push('');
@@ -149,7 +167,7 @@ export function exportMarkdown(characterName: string, versionLabel: string, proj
     });
     lines.push('');
   });
-  const unclassified = cards.filter(card => !assigned.has(card.id));
+  const unclassified = poolCards.filter(card => !assigned.has(card.id));
   if (unclassified.length) {
     lines.push(`## ${t(uiLanguage, 'unclassified')}`);
     lines.push('');
@@ -190,7 +208,7 @@ type Html2Canvas = (element: HTMLElement, options?: {
   imageTimeout?: number;
 }) => Promise<HTMLCanvasElement>;
 
-export async function exportTierImage(project: CharacterProjectData, cards: ApiCard[], versionLabel: string): Promise<Blob> {
+export async function exportTierImage(project: CharacterProjectData, cards: ApiCard[], characterName: string, versionLabel: string): Promise<Blob> {
   if (project.tiers.length === 0) throw new Error('No tiers');
   const renderer = (window as Window & { html2canvas?: Html2Canvas }).html2canvas;
   if (!renderer) throw new Error('html2canvas unavailable');
@@ -199,10 +217,14 @@ export async function exportTierImage(project: CharacterProjectData, cards: ApiC
   const tierRows = Array.from(document.querySelectorAll<HTMLElement>('.tier-row'));
   if (!tierRows.length) throw new Error('No tier rows');
   const backgroundColor = resolveCssValue('--md-sys-color-background');
-  const exportRowWidth = 608;
+  const exportRowWidth = 688;
   const exportPadding = 16;
   const container = document.createElement('div');
   container.style.cssText = `width:${exportRowWidth + exportPadding * 2}px;padding:${exportPadding}px;margin:0 auto;background:${backgroundColor};display:flex;flex-direction:column;gap:12px;font-family:system-ui,sans-serif`;
+  const title = document.createElement('div');
+  title.textContent = project.title.trim() || characterName;
+  title.style.cssText = `width:${exportRowWidth}px;min-height:56px;padding:10px 16px;display:flex;align-items:center;justify-content:center;border:1px solid ${resolveCssValue('--md-sys-color-outline-variant')};border-radius:12px;background:${resolveCssValue('--md-sys-color-surface-container-low')};color:${resolveCssValue('--md-sys-color-on-surface')};font-size:20px;line-height:1.25;font-weight:700;text-align:center;overflow-wrap:anywhere`;
+  container.appendChild(title);
   const version = document.createElement('div');
   version.textContent = `${t(document.documentElement.lang === 'zh' ? 'zh' : 'en', 'gameVersion')}: ${versionLabel}`;
   version.style.cssText = `font-size:12px;font-weight:600;color:${resolveCssValue('--md-sys-color-on-surface-variant')};text-align:right;padding:0 2px`;
@@ -218,14 +240,16 @@ export async function exportTierImage(project: CharacterProjectData, cards: ApiC
     clone.querySelectorAll('.card-note-indicator').forEach(marker => marker.remove());
     const labelWrap = clone.querySelector<HTMLElement>('.tier-label-wrap');
     if (labelWrap) {
-      labelWrap.style.width = '56px';
+      labelWrap.style.width = '136px';
       labelWrap.style.setProperty('--tier-bg', getTierColor(tierIndex));
     }
     const label = clone.querySelector<HTMLElement>('.tier-label');
     if (label) {
       label.setAttribute('contenteditable', 'false');
       label.style.fontWeight = '700';
-      label.style.fontSize = '1.35rem';
+      label.style.fontSize = '.875rem';
+      label.style.lineHeight = '1.15';
+      label.style.overflowWrap = 'anywhere';
     }
     const cardsWrap = clone.querySelector<HTMLElement>('.tier-cards');
     if (cardsWrap) {

@@ -32,6 +32,7 @@ export type ApiCard = {
   image_url: string | null;
   beta_image_url: string | null;
   type_variants: string[] | null;
+  multiplayer_only: boolean | null;
   compendium_order: number;
 };
 
@@ -47,6 +48,7 @@ export type ProjectTier = {
 };
 
 export type CharacterProjectData = {
+  title: string;
   tiers: ProjectTier[];
   notes: Record<string, string>;
 };
@@ -56,6 +58,8 @@ type PersistedState = {
   dataChannel?: DataChannel;
   currentCharacter?: CharacterId;
   theme?: ThemeMode;
+  includeColorless?: boolean;
+  includeMultiplayer?: boolean;
   showColorless?: boolean;
   showNoteMarkers?: boolean;
   dockCollapsed?: boolean;
@@ -67,9 +71,10 @@ export type State = {
   dataChannel: DataChannel;
   dataVersions: Record<DataChannel, string>;
   theme: ThemeMode;
-  showColorless: boolean;
+  includeColorless: boolean;
+  includeMultiplayer: boolean;
   showNoteMarkers: boolean;
-  openMenu: 'character' | 'api-language' | 'data-version' | null;
+  openMenu: 'character' | 'api-language' | 'data-version' | 'card-filter' | null;
   dockCollapsed: boolean;
   search: string;
   currentCharacter: CharacterId;
@@ -104,7 +109,12 @@ function readSavedState(): PersistedState {
     dataChannel: parsed.dataChannel === 'stable' || parsed.dataChannel === 'beta' ? parsed.dataChannel : undefined,
     currentCharacter: CHARACTER_IDS.includes(parsed.currentCharacter as CharacterId) ? parsed.currentCharacter : undefined,
     theme: parsed.theme === 'light' || parsed.theme === 'dark' ? parsed.theme : undefined,
-    showColorless: typeof parsed.showColorless === 'boolean' ? parsed.showColorless : undefined,
+    includeColorless: typeof parsed.includeColorless === 'boolean'
+      ? parsed.includeColorless
+      : typeof parsed.showColorless === 'boolean'
+        ? parsed.showColorless
+        : undefined,
+    includeMultiplayer: typeof parsed.includeMultiplayer === 'boolean' ? parsed.includeMultiplayer : undefined,
     showNoteMarkers: typeof parsed.showNoteMarkers === 'boolean' ? parsed.showNoteMarkers : undefined,
     dockCollapsed: typeof parsed.dockCollapsed === 'boolean' ? parsed.dockCollapsed : undefined,
     project: normalizeSavedProjects(parsed.project),
@@ -115,11 +125,17 @@ function normalizeSavedProjects(project: PersistedState['project']): Record<stri
   if (!project || typeof project !== 'object' || Array.isArray(project)) return undefined;
   const normalized: Record<string, CharacterProjectData> = {};
   Object.entries(project).forEach(([key, value]) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return;
+    const normalizedValue: CharacterProjectData = {
+      title: typeof value.title === 'string' ? value.title.replace(/\s*\r?\n\s*/g, ' ').trim() : '',
+      tiers: Array.isArray(value.tiers) ? value.tiers : [],
+      notes: value.notes && typeof value.notes === 'object' && !Array.isArray(value.notes) ? value.notes : {},
+    };
     if (CHARACTER_IDS.includes(key as CharacterId)) {
-      normalized[`stable:${key}`] = value;
+      normalized[`stable:${key}`] = normalizedValue;
       return;
     }
-    if (/^(stable|beta):(ironclad|silent|defect|necrobinder|regent)$/.test(key)) normalized[key] = value;
+    if (/^(stable|beta):(ironclad|silent|defect|necrobinder|regent)$/.test(key)) normalized[key] = normalizedValue;
   });
   return normalized;
 }
@@ -139,7 +155,8 @@ export const state: State = {
     beta: BETA_DATA_VERSION_FALLBACK,
   },
   theme: getInitialTheme(saved.theme),
-  showColorless: saved.showColorless ?? false,
+  includeColorless: saved.includeColorless ?? false,
+  includeMultiplayer: saved.includeMultiplayer ?? false,
   showNoteMarkers: saved.showNoteMarkers ?? false,
   openMenu: null,
   dockCollapsed: saved.dockCollapsed ?? false,
@@ -183,6 +200,7 @@ export const dom = {
   dataVersionMenu: must<HTMLDivElement>('dataVersionMenu'),
   noteMarkersBtn: must<HTMLButtonElement>('noteMarkersBtn'),
   themeBtn: must<HTMLButtonElement>('themeBtn'),
+  tierTitleInput: must<HTMLInputElement>('tierTitleInput'),
   tierStage: must<HTMLDivElement>('tierRows'),
   addTierBtn: must<HTMLButtonElement>('addTierBtn'),
   addTierText: must<HTMLSpanElement>('addTierText'),
@@ -190,7 +208,9 @@ export const dom = {
   dockHeader: must<HTMLDivElement>('dockHeader'),
   dockTitle: must<HTMLDivElement>('dockTitle'),
   dockCount: must<HTMLDivElement>('dockCount'),
-  includeColorlessBtn: must<HTMLButtonElement>('includeColorlessBtn'),
+  cardFilterBtn: must<HTMLButtonElement>('cardFilterBtn'),
+  cardFilterCount: must<HTMLSpanElement>('cardFilterCount'),
+  cardFilterMenu: must<HTMLDivElement>('cardFilterMenu'),
   searchInput: must<HTMLInputElement>('searchInput'),
   searchCompactHint: must<HTMLSpanElement>('searchCompactHint'),
   dockCards: must<HTMLDivElement>('dockCards'),
@@ -207,7 +227,8 @@ export function saveState(): void {
     dataChannel: state.dataChannel,
     currentCharacter: state.currentCharacter,
     theme: state.theme,
-    showColorless: state.showColorless,
+    includeColorless: state.includeColorless,
+    includeMultiplayer: state.includeMultiplayer,
     showNoteMarkers: state.showNoteMarkers,
     dockCollapsed: state.dockCollapsed,
     project: state.project,

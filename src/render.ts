@@ -17,10 +17,14 @@ function fitDropdownMenu(menu: HTMLElement): void {
     ? dom.apiLanguageBtn
     : menu === dom.dataVersionMenu
       ? dom.dataVersionBtn
+      : menu === dom.cardFilterMenu
+        ? dom.cardFilterBtn
       : null;
   if (fixedAnchor) {
     const rect = fixedAnchor.getBoundingClientRect();
-    menu.style.top = `${rect.bottom + 4}px`;
+    menu.style.top = menu === dom.cardFilterMenu
+      ? `${Math.max(gap, rect.top - menu.offsetHeight - 4)}px`
+      : `${rect.bottom + 4}px`;
     menu.style.left = `${rect.left}px`;
   }
   const rect = menu.getBoundingClientRect();
@@ -341,10 +345,39 @@ export function renderMenus(): void {
   const channelLabel = t(getCurrentUiLanguage(), state.dataChannel === 'stable' ? 'stableChannel' : 'betaChannel');
   dom.dataVersionBtn.title = `${t(getCurrentUiLanguage(), 'gameVersion')}: ${channelLabel} ${state.dataVersions[state.dataChannel]}`;
   dom.dataVersionBtn.setAttribute('aria-label', dom.dataVersionBtn.title);
+  const selectedFilterCount = Number(state.includeMultiplayer) + Number(state.includeColorless);
+  dom.cardFilterBtn.classList.toggle('active', selectedFilterCount > 0);
+  dom.cardFilterBtn.title = t(getCurrentUiLanguage(), 'cardCategories');
+  dom.cardFilterBtn.setAttribute('aria-label', dom.cardFilterBtn.title);
+  dom.cardFilterBtn.setAttribute('aria-expanded', String(state.openMenu === 'card-filter'));
+  dom.cardFilterCount.textContent = selectedFilterCount ? String(selectedFilterCount) : '';
+  dom.cardFilterMenu.innerHTML = '';
+  ([
+    ['multiplayer', 'includeMultiplayer', state.includeMultiplayer],
+    ['colorless', 'includeColorless', state.includeColorless],
+  ] as const).forEach(([category, labelKey, selected]) => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'filter-option';
+    item.dataset.cardCategoryToggle = category;
+    item.setAttribute('role', 'menuitemcheckbox');
+    item.setAttribute('aria-checked', String(selected));
+    if (selected) item.classList.add('selected');
+    const label = document.createElement('span');
+    label.className = 'filter-option-label';
+    label.textContent = t(getCurrentUiLanguage(), labelKey);
+    const check = document.createElement('span');
+    check.className = 'material-icons-round filter-option-check';
+    check.textContent = 'check';
+    item.append(label, check);
+    dom.cardFilterMenu.appendChild(item);
+  });
+  dom.cardFilterMenu.classList.toggle('open', state.openMenu === 'card-filter');
   requestAnimationFrame(() => {
     fitDropdownMenu(dom.characterMenu);
     fitDropdownMenu(dom.apiLanguageMenu);
     fitDropdownMenu(dom.dataVersionMenu);
+    fitDropdownMenu(dom.cardFilterMenu);
   });
 }
 
@@ -358,11 +391,9 @@ function renderHeader(): void {
   dom.exportMarkdownText.textContent = t(uiLanguage, 'exportMarkdown');
   dom.exportImageText.textContent = t(uiLanguage, 'exportImage');
   dom.addTierText.textContent = t(uiLanguage, 'addTier');
+  dom.tierTitleInput.placeholder = t(uiLanguage, 'tierTitlePlaceholder');
+  dom.tierTitleInput.setAttribute('aria-label', t(uiLanguage, 'tierTitlePlaceholder'));
   dom.dockTitle.textContent = t(uiLanguage, 'unclassified');
-  dom.includeColorlessBtn.innerHTML = '<span class="material-icons-round">grain</span>';
-  dom.includeColorlessBtn.classList.toggle('active', state.showColorless);
-  dom.includeColorlessBtn.title = t(uiLanguage, 'includeColorless');
-  dom.includeColorlessBtn.setAttribute('aria-pressed', String(state.showColorless));
   dom.searchInput.placeholder = t(uiLanguage, 'search');
   dom.searchCompactHint.textContent = t(uiLanguage, 'searchCompact');
   dom.noteMarkersBtn.innerHTML = `<span class="material-icons-round">task_alt</span>`;
@@ -381,6 +412,7 @@ function renderHeader(): void {
 export function renderTierStage(): void {
   const project = ensureCharacterProject(state.project, state.dataChannel, state.currentCharacter);
   const cards = new Map(getAllCards().map(card => [card.id, card]));
+  if (document.activeElement !== dom.tierTitleInput) dom.tierTitleInput.value = project.title;
   dom.tierStage.innerHTML = '';
   project.tiers.forEach((tier, tierIndex) => {
     const row = document.createElement('div');
@@ -402,7 +434,7 @@ export function renderDock(): void {
   const project = ensureCharacterProject(state.project, state.dataChannel, state.currentCharacter);
   const assigned = new Set(project.tiers.flatMap(tier => tier.cards));
   const needle = state.search.trim().toLowerCase();
-  const cards = sortCards(getAllCards().filter(card => !assigned.has(card.id) && (state.showColorless || card.color !== 'colorless'))).filter(card => {
+  const cards = sortCards(getPoolCards().filter(card => !assigned.has(card.id))).filter(card => {
     if (!needle) return true;
     const searchText = state.searchIndex[card.id] || `${card.name} ${card.id}`.toLowerCase().replaceAll('_', ' ');
     return searchText.includes(needle);
@@ -511,4 +543,11 @@ export function getProject(): CharacterProjectData {
 
 export function getAllCards(): ApiCard[] {
   return [...(state.cards[state.currentCharacter] || []), ...state.colorlessCards];
+}
+
+export function getPoolCards(): ApiCard[] {
+  return getAllCards().filter(card =>
+    (state.includeColorless || card.color !== 'colorless')
+    && (state.includeMultiplayer || card.multiplayer_only !== true),
+  );
 }

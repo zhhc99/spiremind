@@ -48,10 +48,10 @@
   --tier-card-width:80px;
   --tier-card-gap:10px;
   --tier-cards-padding:10px;
-  --tier-label-width:56px;
+  --tier-label-width:136px;
   --tier-actions-width:41px;
   --tier-cards-width:550px;
-  --page-max-width:709px;
+  --page-max-width:789px;
   --tier-s:#E06C6C;
   --tier-a:#D87A5F;
   --tier-b:#C78B52;
@@ -364,7 +364,21 @@ button,input,textarea{font:inherit}
 .version-option.selected .version-option-number{color:inherit;opacity:.78}
 .version-option-check{opacity:0;color:var(--md-sys-color-primary);font-size:18px;flex-shrink:0}
 .version-option.selected .version-option-check{opacity:1}
+.dock-filter-wrap{position:relative;display:flex;align-items:center;flex-shrink:0}
+.card-filter-btn{overflow:visible}
+.filter-count{position:absolute;right:-5px;top:-5px;display:flex;align-items:center;justify-content:center;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--md-sys-color-primary);color:var(--md-sys-color-on-primary);font-size:.6rem;font-weight:700;line-height:1;pointer-events:none}
+.filter-count:empty{display:none}
+.card-filter-menu{position:fixed;top:0;left:0;right:auto;margin-top:0;min-width:190px;transform-origin:bottom left}
+.dropdown-menu button.filter-option{justify-content:space-between;gap:16px;padding:10px 12px}
+.filter-option-label{min-width:0;font-weight:500}
+.filter-option-check{opacity:0;color:var(--md-sys-color-primary);font-size:18px;flex-shrink:0}
+.filter-option.selected .filter-option-check{opacity:1}
 .main-content{flex:1;padding:16px;display:flex;flex-direction:column;gap:12px;padding-bottom:0}
+.tier-title-row{display:flex;align-items:center;justify-content:center;min-height:56px;padding:8px 16px;border-radius:var(--md-sys-shape-corner-medium);background:var(--md-sys-color-surface-container-low);border:1px solid var(--md-sys-color-outline-variant);transition:box-shadow .25s ease,border-color .2s}
+.tier-title-row:hover{box-shadow:var(--md-sys-elevation-1)}
+.tier-title-row:focus-within{border-color:var(--md-sys-color-primary);box-shadow:0 0 0 1px var(--md-sys-color-primary)}
+.tier-title-input{width:100%;min-width:0;border:none;outline:none;background:transparent;color:var(--md-sys-color-on-surface);font-family:inherit;font-size:1.25rem;line-height:1.25;font-weight:700;text-align:center}
+.tier-title-input::placeholder{color:var(--md-sys-color-on-surface-variant);font-weight:500;opacity:.72}
 .tier-rows{display:flex;flex-direction:column;gap:12px}
 .tier-row{display:flex;align-items:stretch;border-radius:var(--md-sys-shape-corner-medium);background:var(--md-sys-color-surface-container-low);border:1px solid var(--md-sys-color-outline-variant);overflow:hidden;min-height:100px;transition:box-shadow .25s ease,border-color .25s ease,opacity .3s ease,transform .22s cubic-bezier(.4,0,.2,1);position:relative}
 .tier-row:hover{box-shadow:var(--md-sys-elevation-1)}
@@ -374,7 +388,7 @@ button,input,textarea{font:inherit}
 .tier-drag-handle:hover{background:var(--md-sys-color-surface-container);color:var(--md-sys-color-on-surface-variant)}
 .tier-drag-handle .material-icons-round{font-size:18px}
 .tier-label-wrap{display:flex;align-items:center;justify-content:center;width:var(--tier-label-width);flex-shrink:0;background:var(--tier-bg,#888);position:relative}
-.tier-label{font-size:1.35rem;font-weight:700;color:#fff;text-align:center;cursor:text;padding:4px 6px;min-width:28px;border-radius:4px;outline:none;text-shadow:0 1px 3px rgba(0,0,0,.4);transition:background .2s}
+.tier-label{max-width:100%;font-size:.875rem;line-height:1.15;font-weight:700;color:#fff;text-align:center;cursor:text;padding:4px 6px;min-width:28px;border-radius:4px;outline:none;text-shadow:0 1px 3px rgba(0,0,0,.4);overflow-wrap:anywhere;transition:background .2s}
 .tier-label:focus{background:rgba(255,255,255,.2)}
 .tier-cards{flex:0 0 var(--tier-cards-width);display:flex;flex-wrap:wrap;align-content:center;gap:var(--tier-card-gap);padding:var(--tier-cards-padding);min-height:76px;transition:background .2s;position:relative}
 .tier-row.drag-over .tier-cards{background:color-mix(in srgb,var(--md-sys-color-primary-container) 36%,transparent)}
@@ -489,7 +503,7 @@ button,input,textarea{font:inherit}
 .loading-spinner{width:48px;height:48px;border:4px solid var(--md-sys-color-outline-variant);border-top-color:var(--md-sys-color-primary);border-radius:50%;animation:spin 1s linear infinite}
 .empty-tip{display:flex;align-items:center;justify-content:center;width:100%;min-height:84px;border-radius:var(--md-sys-shape-corner-medium);background:var(--md-sys-color-surface-container-low);border:1px dashed var(--md-sys-color-outline-variant);color:var(--md-sys-color-on-surface-variant);font-size:.82rem;text-align:center;padding:12px}
 @keyframes spin{to{transform:rotate(360deg)}}
-@media(max-width:600px){:root{--tier-card-width:64px;--tier-label-width:52px;--tier-cards-width:auto;--tier-actions-width:auto}.top-app-bar{padding:0 12px;gap:8px;min-height:52px}.app-title{font-size:1rem;min-width:0;overflow:hidden;text-overflow:ellipsis}.version-btn{height:34px;min-width:88px;padding:0 8px;gap:4px}.version-btn .material-icons-round{font-size:16px}.version-btn-label{font-size:.68rem}.version-menu{min-width:200px;max-width:calc(100vw - 24px)}.tonal-btn{padding:0 10px;height:34px;min-width:36px}.main-content{padding:12px 12px 0;gap:10px}.tier-label{font-size:1.2rem}.tier-cards{flex:1 1 auto}.card-name{font-size:.65rem}.unclassified-panel{max-height:50vh}.unclassified-panel.collapsed{max-height:44px}.search-field{height:28px}.bigcard-tooltip{max-width:240px}.popup-card{width:min(320px,calc(100vw - 20px));padding:12px}}
+@media(max-width:600px){:root{--tier-card-width:64px;--tier-label-width:96px;--tier-cards-width:auto;--tier-actions-width:auto}.top-app-bar{padding:0 12px;gap:8px;min-height:52px}.app-title{font-size:1rem;min-width:0;overflow:hidden;text-overflow:ellipsis}.version-btn{height:34px;min-width:88px;padding:0 8px;gap:4px}.version-btn .material-icons-round{font-size:16px}.version-btn-label{font-size:.68rem}.version-menu{min-width:200px;max-width:calc(100vw - 24px)}.tonal-btn{padding:0 10px;height:34px;min-width:36px}.main-content{padding:12px 12px 0;gap:10px}.tier-title-row{min-height:50px;padding:7px 12px}.tier-title-input{font-size:1rem}.tier-label{font-size:.75rem}.tier-cards{flex:1 1 auto}.card-name{font-size:.65rem}.unclassified-panel{max-height:50vh}.unclassified-panel.collapsed{max-height:44px}.search-field{height:28px}.bigcard-tooltip{max-width:240px}.popup-card{width:min(320px,calc(100vw - 20px));padding:12px}}
 </style>
 </head>
 <body>
@@ -523,6 +537,7 @@ button,input,textarea{font:inherit}
     </div>
   </header>
   <main class="main-content" id="tierList">
+    <div class="tier-title-row"><input class="tier-title-input" id="tierTitleInput" type="text" autocomplete="off" spellcheck="false"></div>
     <div class="tier-rows" id="tierRows"></div>
     <button class="add-tier-btn" id="addTierBtn"><span class="material-icons-round">add</span><span id="addTierText"></span></button>
     <div style="height:8px"></div>
@@ -533,7 +548,10 @@ button,input,textarea{font:inherit}
         <span class="material-icons-round" style="color:var(--md-sys-color-on-surface-variant);font-size:18px">style</span>
         <span class="panel-title" id="dockTitle"></span>
         <span class="panel-count" id="dockCount">0</span>
-        <button class="dock-toggle-btn" id="includeColorlessBtn" type="button" aria-pressed="false"><span class="material-icons-round">grain</span></button>
+        <div class="dock-filter-wrap">
+          <button class="dock-toggle-btn card-filter-btn" id="cardFilterBtn" type="button" aria-haspopup="menu" aria-expanded="false"><span class="material-icons-round">filter_list</span><span class="filter-count" id="cardFilterCount"></span></button>
+          <div class="dropdown-menu card-filter-menu" id="cardFilterMenu" role="menu"></div>
+        </div>
       </div>
       <div class="search-field">
         <span class="material-icons-round">search</span>

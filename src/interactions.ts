@@ -3,7 +3,7 @@ import { buildCardSearchIndex, sortCards } from './cards';
 import { CHARACTER_IDS, getUiLanguage, t, type DataChannel } from './config';
 import { dom, saveState, state, type ApiCard } from './state';
 import { addTier as appendTier, exportJson, exportMarkdown, exportTierImage, getProjectKey, importJson, moveCard, normalizeImportedProject, removeTier, setNote } from './tierlist';
-import { findCardById, getAllCards, getProject, hideHoverPreview, renderAll, renderDock, renderMenus, renderPopup, renderTierStage, setLoading, showHoverPreview, showSnackbar, updateToolbarScrollState } from './render';
+import { findCardById, getAllCards, getPoolCards, getProject, hideHoverPreview, renderAll, renderDock, renderMenus, renderPopup, renderTierStage, setLoading, showHoverPreview, showSnackbar, updateToolbarScrollState } from './render';
 
 type DesktopDrag =
   | { kind: 'card'; cardId: string; sourceElement: HTMLElement }
@@ -114,7 +114,7 @@ function closeMenus(): void {
   renderMenus();
 }
 
-function toggleMenu(menu: 'character' | 'api-language' | 'data-version'): void {
+function toggleMenu(menu: 'character' | 'api-language' | 'data-version' | 'card-filter'): void {
   state.openMenu = state.openMenu === menu ? null : menu;
   renderMenus();
 }
@@ -598,7 +598,8 @@ function closePopup(): void {
 
 function exportCurrentJson(): void {
   const project = getProject();
-  const name = state.characters[state.currentCharacter]?.name || state.currentCharacter;
+  const characterName = state.characters[state.currentCharacter]?.name || state.currentCharacter;
+  const name = project.title.trim() || characterName;
   const gameVersion = state.dataVersions[state.dataChannel];
   download(`${fileSafeName(name)}-${gameVersion}.json`, new Blob([exportJson(state.currentCharacter, state.apiLang, state.dataChannel, gameVersion, project)], { type: 'application/json;charset=utf-8' }));
   showSnackbar(t(getCurrentUiLanguage(), 'jsonExported'));
@@ -607,9 +608,10 @@ function exportCurrentJson(): void {
 function exportCurrentMarkdown(): void {
   const project = getProject();
   const cards = getAllCards();
-  const name = state.characters[state.currentCharacter]?.name || state.currentCharacter;
+  const characterName = state.characters[state.currentCharacter]?.name || state.currentCharacter;
+  const name = project.title.trim() || characterName;
   const gameVersion = state.dataVersions[state.dataChannel];
-  download(`${fileSafeName(name)}-${gameVersion}.md`, new Blob([exportMarkdown(name, getCurrentDataVersionLabel(), project, cards, getCurrentUiLanguage())], { type: 'text/markdown;charset=utf-8' }));
+  download(`${fileSafeName(name)}-${gameVersion}.md`, new Blob([exportMarkdown(characterName, getCurrentDataVersionLabel(), project, cards, getPoolCards(), getCurrentUiLanguage())], { type: 'text/markdown;charset=utf-8' }));
   showSnackbar(t(getCurrentUiLanguage(), 'markdownExported'));
 }
 
@@ -620,9 +622,11 @@ async function exportCurrentImage(): Promise<void> {
   }
   try {
     showSnackbar(t(getCurrentUiLanguage(), 'imageGenerating'));
-    const name = state.characters[state.currentCharacter]?.name || state.currentCharacter;
+    const project = getProject();
+    const characterName = state.characters[state.currentCharacter]?.name || state.currentCharacter;
+    const name = project.title.trim() || characterName;
     const gameVersion = state.dataVersions[state.dataChannel];
-    const blob = await exportTierImage(getProject(), getAllCards(), getCurrentDataVersionLabel());
+    const blob = await exportTierImage(project, getAllCards(), characterName, getCurrentDataVersionLabel());
     download(`${fileSafeName(name)}-${gameVersion}.png`, blob);
     showSnackbar(t(getCurrentUiLanguage(), 'imageExported'));
   } catch {
@@ -643,12 +647,12 @@ export function bindInteractions(): void {
     event.stopPropagation();
     toggleMenu('data-version');
   });
+  dom.cardFilterBtn.addEventListener('click', event => {
+    event.stopPropagation();
+    toggleMenu('card-filter');
+  });
   dom.noteMarkersBtn.addEventListener('click', () => {
     state.showNoteMarkers = !state.showNoteMarkers;
-    renderAllAndSave();
-  });
-  dom.includeColorlessBtn.addEventListener('click', () => {
-    state.showColorless = !state.showColorless;
     renderAllAndSave();
   });
   dom.themeBtn.addEventListener('click', () => {
@@ -663,6 +667,21 @@ export function bindInteractions(): void {
     appendTier(getProject());
     renderTierStageAndSave();
     showSnackbar(t(getCurrentUiLanguage(), 'tierAdded'));
+  });
+  dom.tierTitleInput.addEventListener('input', event => {
+    getProject().title = (event.target as HTMLInputElement).value.replace(/\s*\r?\n\s*/g, ' ');
+    saveState();
+  });
+  dom.tierTitleInput.addEventListener('blur', event => {
+    const input = event.target as HTMLInputElement;
+    input.value = input.value.replace(/\s*\r?\n\s*/g, ' ').trim();
+    getProject().title = input.value;
+    saveState();
+  });
+  dom.tierTitleInput.addEventListener('keydown', event => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    dom.tierTitleInput.blur();
   });
   dom.dockHeader.addEventListener('click', event => {
     if (!(event.target as HTMLElement).closest('[data-toggle-dock="true"]')) return;
@@ -713,6 +732,17 @@ export function bindInteractions(): void {
     if (!button) return;
     void selectDataChannel(button.dataset.dataChannelSelect || '');
   });
+  dom.cardFilterMenu.addEventListener('click', event => {
+    const button = (event.target as HTMLElement).closest<HTMLElement>('[data-card-category-toggle]');
+    if (!button) return;
+    event.stopPropagation();
+    if (button.dataset.cardCategoryToggle === 'multiplayer') state.includeMultiplayer = !state.includeMultiplayer;
+    else if (button.dataset.cardCategoryToggle === 'colorless') state.includeColorless = !state.includeColorless;
+    else throw new Error(`Unsupported card category: ${button.dataset.cardCategoryToggle}`);
+    renderDock();
+    renderMenus();
+    saveState();
+  });
   dom.tierStage.addEventListener('click', event => {
     const sortButton = (event.target as HTMLElement).closest<HTMLElement>('[data-sort-tier]');
     if (sortButton) {
@@ -757,7 +787,7 @@ export function bindInteractions(): void {
   });
   document.addEventListener('click', event => {
     const target = event.target as HTMLElement;
-    if (!target.closest('.char-select-wrap')) closeMenus();
+    if (!target.closest('.char-select-wrap, .dock-filter-wrap')) closeMenus();
   });
   document.addEventListener('keydown', event => {
     if (event.key === 'Shift' && !hoverUpgraded) {
